@@ -3,22 +3,17 @@
 
 from __future__ import unicode_literals
 
-from collections import deque
 import json
 import logging
 import os
 import pprint
-import random
-import yaml
 import sys
+import yaml
 
 import click
 import requests
-import time
 
-from inventory import parsers
-import genomebrowser.exported_methods as gbm
-from bio.crispr.nucleases import Nuclease, NUCLEASES
+from dgparse import parsers
 
 logging.basicConfig()
 log = logging.getLogger(__name__)
@@ -116,21 +111,6 @@ def autoclone(design_path, target_server, email, password):
         msg = "Cloning Solution Generation failed for {0}".format(dna_design['name'])  # NOQA
         log.warn(msg)
         log.warn(pprint.pprint(resp.text))
-
-
-def work(design_file_name):
-    """Define the workflow for a design"""
-
-    log.info('Loading {0}'.format(design_file_name))
-    design = load_design(design_file_name)
-    # Annotation would go here
-    log.info("Running {0}".format(design_file_name))
-    solutions = get_cloning_solutions(design)
-    # Validation could go here
-    if solutions:
-        map(validate_solution, solutions)
-    return solutions
-
 
 
 @cli.command()
@@ -411,30 +391,6 @@ def run_pair_tornado(target_server, gene, genome, nuclease, async, output):
         click.echo(resp.text)
         raise
 
-
-@cli.command()
-def smoke_test(target_server, email, password):
-    scoring_queue = deque()
-    genomes = load_genomes(target_server)
-    for genome in genomes:
-        #For each gene
-        genes = load_genes(target_server)
-        for gene in genes:
-            gene_data = gbm.load_gene_data(gene, genome)
-            exons = [exon for exon in transcript['exons']
-                     for transcript in gene_data['transcripts']]
-            walker_id = walk_gene(target_server, gene, genome)
-            scoring_queue.append(walker_id)
-            for nuclease in NUCLEASES.itervalues():
-                nuclease_name = nuclease['name']
-                for exon in exons:
-                    guides = load_guides(target_server, exon, nuclease_name,
-                                         email, password)
-                    guide_to_score = random.choice(guides)
-                    task_id = score_guide(target_server, guide_to_score, genome)
-                    scoring_queue.append(task_id)
-                tornado_id = run_pair_tornado(target_server, gene, genome, nuclease)
-                scoring_queue.append(tornado_id)
 
 @cli.command()
 @click.argument('target_server')
