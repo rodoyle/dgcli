@@ -8,18 +8,20 @@ import logging
 import os
 import pprint
 import sys
+import uuid
 import yaml
 
 import click
 import requests
 
-from dgparse import parsers
+import defaults
 
 logging.basicConfig()
 log = logging.getLogger(__name__)
 log.setLevel(logging.DEBUG)
 
 BIODATA = os.environ.get('BIODATA', '/opt/biodata')
+TARGET_SERVER = 'https://api.deskgen.com'  #default
 
 CONFIG = {
     'BIODATA': BIODATA,
@@ -391,6 +393,55 @@ def run_pair_tornado(target_server, gene, genome, nuclease, async, output):
         click.echo(resp.text)
         raise
 
+@cli.command()
+@click.argument('spec_file', default=sys.stdin, type=click.File())
+@click.option('--async', default=False, type=click.BOOL)
+@click.option('--dryrun', default=False, type=click.BOOL)
+@click.option('--output', default=sys.stdout, type=click.File())
+def design_library(spec_file, async, dryrun, output):
+    """
+    Make a request to the server to start a library design job
+    :param spec_file:
+    :param async:
+    :param dryrun:
+    :param output:
+    :return:
+    """
+    endpoint_url = 'rpc'
+    target_url = os.path.join(TARGET_SERVER, endpoint_url)
+    specs = json.load(spec_file)
+    request = {
+        "jsonrpc": '2.0',
+        "method": 'design_library',
+        "id": 1,
+        "params": {
+            "genome": specs.get('genome', defaults.DEFAULT_GENOME),
+            "nuclease": specs.get('nuclease', defaults.DEFAULT_NUCLEASE),
+            "defaults": specs.get('defaults', defaults.DEFAULT_GENE_WALKER),
+            "targets": specs.get('targets'),
+            "callbacks": specs.get('callbacks', None),
+            "name": specs.get('name', "Custom_Library"),
+            "description": specs.get('description'),
+            "dry_run": dryrun,
+            "async": async,
+        },
+    }
+    resp = requests.post(target_url,
+                         json.dumps(request),
+                         headers={b'content-type': b'application/json'},
+                         )
+    try:
+        if async:
+            task_id = resp.json()['result']['task_id']
+            return task_id
+        else:
+            yaml.dump(resp.json()['result'], output)
+    except KeyError:
+        click.echo(resp.text)
+        raise
+    except ValueError:
+        click.echo(resp.text)
+        raise
 
 @cli.command()
 @click.argument('target_server')

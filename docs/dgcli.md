@@ -31,11 +31,9 @@ Example Library Input
     "targets": [
        // an array of targets, each element should be a JSON RPC request object
       {
-        "jsonrpc": '2.0', //AUTO add this if it makes sense
-        "id": 1, //AUTO Important to associate jobs with callbacks and parent libs
-        "method": "walk_gene" // Or some other wizard function
-        "params": { 
-          // target specific parameters to override the defaults
+        "scoring_function": { a different scoring function},
+        "gene": {gene dictionary},
+        "filters": [ list of filters],
       },
     ],
     "callbacks": [
