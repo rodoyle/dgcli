@@ -13,7 +13,7 @@ setup(name='dgcli',
       packages=find_packages(),
       entry_points={
           'console_scripts': [
-              'dg = cli_interface:main',
+              'dg = cli_interface:cli',
           ]
       },
       install_requires=[
@@ -21,6 +21,7 @@ setup(name='dgcli',
           'requests',
           'pyyaml',
           'dgparse',
+          'xlrd',
       ],
       tests_require=[
           'tox',

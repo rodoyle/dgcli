@@ -3,6 +3,7 @@
 
 from __future__ import unicode_literals
 
+import csv
 import json
 import logging
 import os
@@ -10,6 +11,7 @@ import pprint
 import sys
 import uuid
 import yaml
+import xlrd
 
 import click
 import requests
@@ -507,11 +509,53 @@ def load_genome(target_server, genome):
     )
     click.echo(resp.text)
 
-if __name__ == '__main__':
-    cli()
+
+def parse_excel_file(filehandle):
+    """
+    Parse an excel file and return a list of targets
+    :param filehandle:
+    :return:
+    """
+    targets = []
+
+    target_file = xlrd.open_workbook(filehandle)
+    click.echo("Opended XLS workbook of targets")
+    sheet = target_file.sheet_by_index(0)  # get the first sheet
+    for row_idx in range(1, sheet.nrows):
+        row = sheet.row_values(row_idx)
+        targets.append({
+            "gene": {
+                "name": row[0],  # the name
+                "accession": row[1]  # the accession
+            }
+        })
+    return targets
+
+
+
+@cli.command()
+@click.argument('spec_file_path', type=click.Path())
+@click.option('--target_file', default=sys.stdin, type=click.File())
+@click.option('--output', default=sys.stdout, type=click.File())
+@click.option('--update', default=False, type=click.BOOL)
+def append_targets(spec_file_path, target_file, output, update):
+    """Parse an xlsx or csv formatted target list
+    Append a new target JSON object to the library spec JSON object
+    """
+    with open(spec_file_path, b'r') as spec_file:
+        click.echo(spec_file)
+        specs = json.load(spec_file)
+    if target_file.name.endswith('xlsx'):  # if excel file
+        specs['targets'] = parse_excel_file(target_file.name)
+    if update:
+        with open(spec_file_path, b'w') as spec_file:
+            json.dump(specs, spec_file, indent=2)
+    else:
+        json.dump(specs, output, indent=2)
 
 if __name__ == '__main__':
     cli()
+
 
 
 
