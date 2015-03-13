@@ -20,7 +20,6 @@ setup(name='dgcli',
           'click',
           'requests',
           'pyyaml',
-          'dgparse',
           'xlrd',
       ],
       tests_require=[
