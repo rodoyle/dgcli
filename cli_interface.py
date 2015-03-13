@@ -22,14 +22,17 @@ logging.basicConfig()
 log = logging.getLogger(__name__)
 log.setLevel(logging.DEBUG)
 
-BIODATA = os.environ.get('BIODATA', '/opt/biodata')
-TARGET_SERVER = 'https://api.deskgen.com'  #default
+RC_PATH = os.path.expanduser('~/.dgrc')  # Get normalized location of RC files
+with open(RC_PATH, 'r') as rc_file:
+    CONFIG = yaml.load(rc_file) # Load Run Ctrl config into RAM
 
-CONFIG = {
-    'BIODATA': BIODATA,
-    'email': None,
-    'password': None
-}
+# Check the ENV for any local overrides
+CONFIG.update(os.environ)
+BIODATA = CONFIG.get('BIODATA', '/opt/biodata')
+
+# Derived Constants
+RPC_URL = os.path.join(CONFIG['target_server'], 'rpc')
+DESIGNS = os.path.join(CONFIG['biodata_root'], 'dnadesigns')
 
 
 @click.group()
@@ -80,19 +83,15 @@ def validate_solution(solution_json):
 
 @cli.command()
 @click.argument('design_path', type=click.Path())
-@click.argument('target_server')
-@click.argument('email')
-@click.argument('password')
-def autoclone(design_path, target_server, email, password):
+def autoclone(design_path, target_server):
     """
     AutoClone a DNA Design
     """
-    url = os.path.join(target_server, 'rpc')
+    url = RPC_URL
     with open(design_path, 'r') as design_file:
         # first try opening a valid json file from a previous command
         dna_design = design_file.read()
         # next try parsing the file
-
 
     body = {
         'jsonrpc': '2.0',
@@ -105,7 +104,7 @@ def autoclone(design_path, target_server, email, password):
     }
     resp = requests.post(url,
                          json.dumps(body),
-                         auth=(email, password))  # required
+                         auth=(CONFIG['email'], CONFIG['password']))  # required
 
     if resp.ok:
         msg = "{0} cloned".format(dna_design['name'])
@@ -118,17 +117,16 @@ def autoclone(design_path, target_server, email, password):
 
 
 @cli.command()
-@click.argument('target_server')
 @click.argument('object')
 @click.option('--name', default=None)
-def read(target_server, object, name=None):
+def read(object, name=None):
     """Load all of an object"""
     if object in ('genome', 'chromosome', 'gene', 'transcript',
                   'exon', 'cds', 'cdsregion', 'trackedguide'):
         service = 'genomebrowser'
     else:
         service = 'inventory'
-    endpoint_url = os.path.join(target_server, 'api/{0}/crud'.format(service))
+    endpoint_url = os.path.join(CONFIG['target_server'], 'api/{0}/crud'.format(service))
     filters = {}
     if name:
         filters.update({'name': name})
@@ -138,7 +136,7 @@ def read(target_server, object, name=None):
             'filter': filters,
         }
     }
-    credintials = ('edwardp@deskgen.com', 'VALIS')
+    credintials = (CONFIG['email'], CONFIG['password'])
     resp = requests.post(endpoint_url, json.dumps(body), auth=credintials)
     try:
         read_list = resp.json()['read']
@@ -150,10 +148,9 @@ def read(target_server, object, name=None):
         pprint.pprint(resp.text)
 
 @cli.command()
-@click.argument('target_server')
 @click.argument('gene_name')
 @click.argument('output', type=click.File('wb'))
-def load_gene(target_server, gene_name, output):
+def load_gene(gene_name, output):
     """Load a gene and all the target region data from the genome browser"""
     gene_instruction = {
         'object': 'gene',
@@ -165,7 +162,7 @@ def load_gene(target_server, gene_name, output):
                        ],
         }
     }
-    url = os.path.join(target_server, 'api/genomebrowser/crud')
+    url = os.path.join(CONFIG['target_server'], 'api/genomebrowser/crud')
     resp = requests.post(
         url,
         json.dumps(gene_instruction),
@@ -187,18 +184,17 @@ def load_gene(target_server, gene_name, output):
 
 
 @cli.command()
-@click.argument('target_server')
 @click.argument('chr_name')
 @click.argument('start_end', nargs=2, type=click.IntRange())
 @click.option('--nuclease', default='wtCas9')
-def load_guides(target_server, chr_name, start_end, nuclease):
+@click.option('--output', type=click.File('wb'), default=sys.stdout)
+def load_guides(chr_name, start_end, nuclease, output):
     """
     Test the load guide services. This is a synchronous method.
     This really need to be improved to handle multiple genomes better.
     :return:
     """
-    endpoint_url = 'rpc'
-    target_url = os.path.join(target_server, endpoint_url)
+    target_url = RPC_URL
     params = {
         "chromosome": {
             'name': chr_name,
@@ -220,8 +216,7 @@ def load_guides(target_server, chr_name, start_end, nuclease):
                          headers={b'content-type': b'application/json'})
     try:
         guides = resp.json()['result']
-        click.echo(pprint.pprint(guides))
-        return guides
+        json.dump(guides, indent=2)
     except KeyError:
         log.warn("No RESULT in response")
         pprint.pprint(resp.json())
@@ -230,17 +225,15 @@ def load_guides(target_server, chr_name, start_end, nuclease):
 
 
 @cli.command()
-@click.argument('target_server')
 @click.argument('guide')
 @click.argument('genome')
 @click.option('--async', default=False, type=click.BOOL)
-def score_guide(target_server, guide, genome, async):
+def score_guide(guide, genome, async):
     """
     Test the score_guide method
     :return:
     """
-    endpoint_url = 'rpc'
-    target_url = os.path.join(target_server, endpoint_url)
+    target_url = RPC_URL
     body = {
         'jsonrpc': '2.0',
         'method': 'score_guide',
@@ -291,14 +284,12 @@ def score_guide(target_server, guide, genome, async):
             pprint.pprint(resp.text)
 
 @cli.command()
-@click.argument('target_server', default='https://api-staging.deskgen.com')
 @click.argument('gene')
 @click.argument('genome')
 @click.option('--async', default=False, type=click.BOOL)
-def walk_gene(target_server, gene, genome, async):
+def walk_gene(gene, genome, async):
     """Test you can precompute guides for a gene"""
-    endpoint_url = 'rpc'
-    target_url = os.path.join(target_server, endpoint_url)
+    target_url = RPC_URL
     initial_request = {
         'jsonrpc': '2.0',
         'method': 'walk_gene',
@@ -341,16 +332,14 @@ def walk_gene(target_server, gene, genome, async):
 
 
 @cli.command()
-@click.argument('target_server', default='https://api-staging.deskgen.com')
 @click.argument('gene')
 @click.argument('genome', default='GRCh37.p13')
 @click.argument('nuclease', default='Cas9D10A')
 @click.option('--async', default=False, type=click.BOOL)
 @click.option('--output', default=sys.stdout, type=click.File())
-def run_pair_tornado(target_server, gene, genome, nuclease, async, output):
+def run_pair_tornado(gene, genome, nuclease, async, output):
     nuclease_dict = {'name': nuclease}
-    endpoint_url = 'rpc'
-    target_url = os.path.join(target_server, endpoint_url)
+    target_url = RPC_URL
     initial_request = {
         'jsonrpc': '2.0',
         'method': 'pair_tornado',
@@ -400,7 +389,8 @@ def run_pair_tornado(target_server, gene, genome, nuclease, async, output):
 @click.option('--async', default=False, type=click.BOOL)
 @click.option('--dryrun', default=False, type=click.BOOL)
 @click.option('--output', default=sys.stdout, type=click.File())
-def design_library(spec_file, async, dryrun, output):
+@click.option('--dump', default=False, type=click.BOOL)
+def design_library(spec_file, async, dryrun, output, dump):
     """
     Make a request to the server to start a library design job
     :param spec_file:
@@ -409,8 +399,7 @@ def design_library(spec_file, async, dryrun, output):
     :param output:
     :return:
     """
-    endpoint_url = 'rpc'
-    target_url = os.path.join(TARGET_SERVER, endpoint_url)
+    target_url = RPC_URL
     specs = json.load(spec_file)
     request = {
         "jsonrpc": '2.0',
@@ -421,13 +410,16 @@ def design_library(spec_file, async, dryrun, output):
             "nuclease": specs.get('nuclease', defaults.DEFAULT_NUCLEASE),
             "defaults": specs.get('defaults', defaults.DEFAULT_GENE_WALKER),
             "targets": specs.get('targets'),
-            "callbacks": specs.get('callbacks', None),
+            #"callbacks": specs.get('callbacks', None),
             "name": specs.get('name', "Custom_Library"),
             "description": specs.get('description'),
             "dry_run": dryrun,
             "async": async,
         },
     }
+    if dump:  # dump the request body
+        json.dump(request, sys.stdout, indent=2)
+        return
     resp = requests.post(target_url,
                          json.dumps(request),
                          headers={b'content-type': b'application/json'},
@@ -437,7 +429,7 @@ def design_library(spec_file, async, dryrun, output):
             task_id = resp.json()['result']['task_id']
             return task_id
         else:
-            yaml.dump(resp.json()['result'], output)
+            json.dump(resp.json()['result'], output, indent=2)
     except KeyError:
         click.echo(resp.text)
         raise
@@ -446,12 +438,14 @@ def design_library(spec_file, async, dryrun, output):
         raise
 
 @cli.command()
-@click.argument('target_server')
 @click.argument('task_id')
-def check_status(target_server, task_id):
-
-    endpoint_url = 'rpc'
-    target_url = os.path.join(target_server, endpoint_url)
+def check_status(task_id):
+    """
+    Check the status of an asynchronous Job
+    :param task_id:
+    :return:
+    """
+    target_url = RPC_URL
     body = {
         'jsonrpc': '2.0',
         'method': 'check_status',
@@ -491,10 +485,9 @@ def run_polling(target_server, scoring_queue, email, password):
 
 
 @cli.command()
-@click.argument('target_server')
 @click.argument('genome')
-def load_genome(target_server, genome):
-    url = os.path.join(target_server, 'api/genomebrowser/crud')
+def load_genome(genome):
+    url = os.path.join(CONFIG['target_server'], 'api/genomebrowser/crud')
     body = {
         'object': 'genome',
         'read': {
