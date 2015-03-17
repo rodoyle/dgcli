@@ -1,0 +1,14 @@
+# DeskGen Command Line Interface Run Control File
+# Format is YAML, because that's what we use for Salt and Manifests
+
+#target_server: 'https://api-staging.deskgen.com'
+#target_server: 'https://api.deskgen.com'
+target_server: 'http://localhost:8080'
+email: 'rileyd@deskgen.com'
+password: 'test'  #switch to API tokens later
+biodata_root: '/home/rileyd/biodata'
+genome:
+  version: "GRCh38.p2"
+  name: "Human"
+
+
