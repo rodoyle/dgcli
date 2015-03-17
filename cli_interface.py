@@ -118,8 +118,10 @@ def autoclone(design_path, target_server):
 
 @cli.command()
 @click.argument('object')
-@click.option('--name', default=None)
-def read(object, name=None):
+@click.option('--filters', default=None)
+@click.option('--expand', default=None)
+@click.option('--output', type=click.File(), default=sys.stdout)
+def read(object, filters, expand, output):
     """Load all of an object"""
     if object in ('genome', 'chromosome', 'gene', 'transcript',
                   'exon', 'cds', 'cdsregion', 'trackedguide'):
@@ -127,21 +129,23 @@ def read(object, name=None):
     else:
         service = 'inventory'
     endpoint_url = os.path.join(CONFIG['target_server'], 'api/{0}/crud'.format(service))
-    filters = {}
-    if name:
-        filters.update({'name': name})
+    read = {}
+    if filters:
+        read['filter'] = json.loads(filters)
+    if expand:
+        read['expand'] = json.loads(expand)
     body = {
         'object': object,
         'read': {
             'filter': filters,
+            'expand': [[expand]]
         }
     }
     credintials = (CONFIG['email'], CONFIG['password'])
     resp = requests.post(endpoint_url, json.dumps(body), auth=credintials)
     try:
         read_list = resp.json()['read']
-        click.echo(pprint.pprint(read_list))
-        return read_list
+        json.dump(read_list, output, indent=2)
     except KeyError:
         pprint.pprint(resp.text)
     except ValueError:
