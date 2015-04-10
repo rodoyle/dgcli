@@ -32,7 +32,10 @@ BIODATA = CONFIG.get('BIODATA', '/opt/biodata')
 
 # Derived Constants
 RPC_URL = os.path.join(CONFIG['target_server'], 'rpc')
+GENOMEBROWSER_TRACKS = os.path.join(CONFIG['target_server'], 'api/genomebrowser')
 DESIGNS = os.path.join(CONFIG['biodata_root'], 'dnadesigns')
+GB_MODELS = ['gene', 'transcript', 'exon', 'cds', 'cdsregion', 'breakpoint',
+             'translocation', 'fragilesite']
 
 
 @click.group()
@@ -549,6 +552,42 @@ def append_targets(spec_file_path, target_file, output, update):
             json.dump(specs, spec_file, indent=2)
     else:
         json.dump(specs, output, indent=2)
+
+
+@cli.command()
+@click.argument('genome', envvar='GENOME')
+@click.argument('chromosome')
+@click.argument('start_end', nargs=2, type=click.IntRange())
+@click.argument('tracks', type=click.Choice(GB_MODELS))
+@click.option('--strand', default=0)
+@click.option('--output', type=click.File('wb'), default=sys.stdout)
+@click.option('--sequence', default=False)
+def query_genome(genome, chromosome, start_end, tracks, strand, output, sequence):
+    """"
+    Load all the track data in the genome browser in an interval
+    """
+    target_url = GENOMEBROWSER_TRACKS
+    instruction = {
+        "chromosome": {
+            "name": chromosome,
+        },
+        "genome": {
+            "version": genome,
+        },
+        "target_region": {
+            "start": start_end[0],
+            "end": start_end[1],
+            "strand": strand if strand else 0,  # optional, default 0
+        },
+        "region_type": tracks,
+        "sequence": sequence
+    }
+
+    resp = requests.post(target_url, json.dumps(instruction))
+    try:
+        json.dump(resp.json(), output, indent=2)
+    except ValueError:
+        pprint.pprint(resp.text)
 
 if __name__ == '__main__':
     cli()
