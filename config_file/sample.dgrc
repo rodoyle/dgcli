@@ -11,4 +11,12 @@ genome:
   version: "GRCh38.p2"
   name: "Human"
 
+activity_params:
+  name: 'doench'
+  minscore: 0.0
+
+offtarget_params:
+  name: 'mitv1'
+  minscore: 0.0
+  maxmismatch: 3
 
