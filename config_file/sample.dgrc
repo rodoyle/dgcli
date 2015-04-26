@@ -1,5 +1,6 @@
 # DeskGen Command Line Interface Run Control File
 # Format is YAML, because that's what we use for Salt and Manifests
+# Target Server - set the default target for all requests
 
 #target_server: 'https://api-staging.deskgen.com'
 #target_server: 'https://api.deskgen.com'
@@ -20,3 +21,5 @@ offtarget_params:
   minscore: 0.0
   maxmismatch: 3
 
+dnamolecule:  # properties specific to DNA molecules
+  regex: '.dna'  # a regular expression that matches all dna molecules
