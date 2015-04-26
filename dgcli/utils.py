@@ -11,6 +11,7 @@ import json
 import multiprocessing
 from collections import deque
 
+import os
 import requests
 import yaml
 
@@ -100,5 +101,28 @@ def make_batch_rpc(endpoint_url, credentials, jobs, method, output,
                                       output_path, on_error, lock)).start()
 
 
+def iter_repository(repo_root, extension_mapping):
+    """
+    Return an iterator over the files in a repository in a depth first manner.
+    At each terminal node, check the file extensions. If the extension, matches
+    something in the extension mapping, invoke the parser in the extension
+    mapping.
+    """
+    for root, dirs, files in os.walk(repo_root):
+        #print root, dirs, files
+        for folder in dirs:  # filter out the hidden files
+            if (root == "."):
+                # print "Ignoring", folder
+                dirs.remove(folder)
+        for name in files:
+            extension = os.path.splitext(name)
+            if extension in extension_mapping:
+                parser = extension_mapping[extension]
+                with open(name, 'r') as open_file:
+                    parsed_data = parser(open_file)
+                    #not really a url, but useful non the less to get at related
+                    # files
+                    parsed_data['url'] = os.path.join(root, name)
+                yield parsed_data
 
 
