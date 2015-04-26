@@ -3,23 +3,23 @@
 
 from __future__ import unicode_literals
 
-import functools
 import json
 import logging
 import os
 import pprint
 import sys
 import yaml
-import xlrd
 
 import click
 import requests
 
-import defaults
+from dgparse.genbank import parse as genbank
+
 import dgcli.genomebrowser as gb
 from dgcli.genomebrowser import GB_MODELS
 from dgcli import genome_editing as ge
 from dgcli import utils, libraries
+from dgcli import inventory as inv
 
 logging.basicConfig()
 log = logging.getLogger(__name__)
@@ -66,7 +66,7 @@ def load_design_file(design_file_name):
     """Parse and prepare the DnaDesign Object"""
     design_filepath = os.path.join(BIODATA, 'dnadesigns', design_file_name)
     with open(design_filepath) as dnadesign_file:
-        data = parsers.genbank.parse(dnadesign_file)[0]
+        data = genbank(dnadesign_file)[0]
         data['sha1'] = data['sequence']['sha1']
         data['sequence'] = data['sequence']['seq']
         data.pop('file_contents')
@@ -113,11 +113,34 @@ def fetch_cmd(object, filters, output):
         pprint.pprint(resp.text)
 
 
+@cli.command('push')
+@click.argument('type')
+@click.argument('items', type=click.Path())
+@click.option('--format', default='yaml')
+@click.option('--output', '-o', type=click.File(), default=sys.stdout)
+def push_cmd(type, items, format, output):
+    """Push a list of objects to a remote server"""
+    target_url = os.path.join(CONFIG['target_server'], inv.INVENTORY_CRUD)
+    # Trigger parsing
+
+    def on_error(response):
+        try:
+            click.echo(response.json())
+        except ValueError:
+            click.echo(response.text)
+
+    items = yaml.load(items)
+    for item in items:
+        instruction = inv.make_create_request(type, item)
+        utils.make_post(target_url, CREDENTIALS, instruction, output, on_error)
+
+
+
 @cli.command('slice_genome')
-@click.argument('chromosome', help="Target Chromosome, ie. chr1")
-@click.argument('start_end', nargs=2, type=click.IntRange(), help="Interval")
+@click.argument('chromosome')
+@click.argument('start_end', nargs=2, type=click.IntRange())
 @click.argument('tracks', type=click.Choice(GB_MODELS))
-@click.option('--genome', default=CONFIG['genome'], help="Target Genome")
+@click.option('--genome', default=CONFIG['genome'])
 @click.option('--strand', default=0)
 @click.option('--output', type=click.File('wb'), default=sys.stdout)
 @click.option('--sequence', default=False)
@@ -146,7 +169,7 @@ def slice_genome_cmd(genome, chromosome, start_end, tracks, strand, output,
 
 
 @cli.command('score_guides')
-@click.argument('guides', type=click.File(), default=sys.stdin, help='stream of mapped guides')
+@click.argument('guides', type=click.File(), default=sys.stdin)
 @click.option('--genome', default=CONFIG['genome'])
 @click.option('--output', '-o', type=click.File(), default=sys.stdout)
 @click.option('--async', default=False, type=click.BOOL)
@@ -181,12 +204,9 @@ def start_design(spec_file, async, output):
     together and run either synchronously or asynchronously.
 
     """
-    utils.make_json_rpc()
+    #TO DO fix this
+    resp = utils.make_json_rpc(RPC_URL, CREDENTIALS, 'design_library')
 
-    resp = requests.post(target_url,
-                         json.dumps(initial_request),
-                         headers={b'content-type': b'application/json'},
-                         )
     try:
         guides = resp.json()['result']
         click.echo(pprint.pprint(guides))
