@@ -9,17 +9,18 @@ from __future__ import unicode_literals
 
 import json
 import os
+import yaml
+import re
+from collections import namedtuple
 
 import requests
 
 import dgparse
 
 INVENTORY_CRUD = 'api/inventory/crud'
+UPLOAD_URL = 'api/inventory/upload'
+DESIGN_UPLOAD_URL = 'uploadDesignFile'
 
-EXTENSION_MAPPING = {
-    '.dna': 'dnafeature',
-    # '.seq': 'dnamoleculefile',
-}
 
 UNIQUE_CONSTRAINTS = {
     'dnamoleculesequence': ['sha1'],
@@ -42,11 +43,6 @@ RELATIONS = {
     'dnamolecule_dnafeature': ['dnamolecule', 'dnafeature'],
     'dnadesign_dnafeature': ['dnadesign', 'dnafeature'],
 }
-
-PARSE_ORDER = ['organisation', 'user', 'dnafeaturepattern', 'dnafeaturecategory',
-               'dnafeature', 'dnadesign', 'dnamoleculesequence', 'dnamolecule',
-               'dnamoleculefile',
-               'dnadesigndnafeature', 'dnamoleculednafeature']
 
 
 def make_create_request(object_type, objects):
@@ -211,7 +207,7 @@ def find_new(local, remote):
     # local should only contain new items now.
 
 
-def sync(requestor, local_root):
+def sync(requestor, local_root, schema):
     """
     Given a repistory root and a remote server, traverse the repository
     and compare the contents to the remote server to get a list of objects to
@@ -223,10 +219,53 @@ def sync(requestor, local_root):
     :return:
     """
     local = build_local(local_root)
-    remote = fetch_remote(requestor, PARSE_ORDER)
+    remote = fetch_remote(requestor, schema['parse_order'])
     find_new(local, remote)  #modify in place
     push_remote(requestor, local, remote)
 
+
+
+def get_file_conventions(conf_path):
+    """Return a function that will consider paths, check they conform to a
+    schema, and return a list of the valid files"""
+
+    with open(conf_path) as conf_handle:
+        conf = yaml.load(conf_handle)
+
+    validators = list()
+    for identifier, params in conf.iteritems():
+        regex = re.compile(params['file_pattern']['regex'])
+        name_tokens = params['file_pattern']['attributes']
+
+        def validator(filename):
+            match_obj = regex.match(filename)
+            if match_obj:
+                data = {attr: match_obj.group(idx) for idx, attr in enumerate(name_tokens)}
+                params.pop('file_pattern')
+                data.update(params)
+                return namedtuple('validator', **data)(**data)
+            else:
+                return None
+
+        validators.append(validator)
+    return validators
+
+
+def upload_files(local_root, schema_path, file_conv_path):
+    """"Loop over a directory and upload all valid files encountered"""
+    with open(schema_path) as sp:
+        schema = json.load(sp)
+
+    validators = get_file_conventions(file_conv_path)
+
+    for root, dirs, files in os.walk(local_root):
+        for name in files:
+            for v in validators:
+                abspath = os.path.join(root, name)
+                valid_data = v(name)
+                if valid_data:
+                    url = schema['definitions'][valid_data.type]['upload_url']
+                    yield (url, abspath)
 
 
 
