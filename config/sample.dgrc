@@ -2,9 +2,9 @@
 # Format is YAML, because that's what we use for Salt and Manifests
 # Target Server - set the default target for all requests
 
-#target_server: 'https://api-staging.deskgen.com'
 #target_server: 'https://api.deskgen.com'
-target_server: 'http://localhost:8080'
+
+organisation: 'deskgen.com'
 email: 'rileyd@deskgen.com'
 password: 'test'  #switch to API tokens later
 biodata_root: '/home/rileyd/biodata'
@@ -21,5 +21,6 @@ offtarget_params:
   minscore: 0.0
   maxmismatch: 3
 
-dnamolecule:  # properties specific to DNA molecules
-  regex: '.dna'  # a regular expression that matches all dna molecules
+schema: "remote_schema.json"
+
+file_convention: "file_convention.yaml"
