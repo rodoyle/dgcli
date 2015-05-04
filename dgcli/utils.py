@@ -41,6 +41,20 @@ def make_post(endpoint_url, credentials, body_dict, output, on_error):
         on_error(resp)
 
 
+def make_file_upload_request(endpoint_url, credentials, file_path, output, on_error):
+
+    resp = requests.post(endpoint_url,
+                         files={'inventory_file': open(file_path, 'rb')},
+                         auth=credentials)
+    if resp.ok:  # expect and HTTPCreated 201 Response
+        data = resp.json()
+        yaml.dump(data, output, indent=2)
+    else:
+        on_error(resp)
+
+
+
+
 def make_json_rpc(endpoint_url, credentials, id_, method, params, output, on_error, async=False):
     """
     Utility function to make json RPC requests
