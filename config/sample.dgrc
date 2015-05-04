@@ -21,6 +21,6 @@ offtarget_params:
   minscore: 0.0
   maxmismatch: 3
 
-schema: "remote_schema.json"
+schema: "/home/rileyd/biodata/remote_schema.json"
 
-file_convention: "file_convention.yaml"
+file_convention: "/home/rileyd/biodata/file_convention.yaml"

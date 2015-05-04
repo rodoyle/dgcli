@@ -27,4 +27,9 @@ setup(name='dgcli',
           'pytest',
           'mock',
       ],
+      data_files=[
+          'config/file_convention.yaml',
+          'config/remote_schema.yaml',
+          'config/sample.dgrc'
+      ]
 )

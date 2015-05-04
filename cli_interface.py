@@ -13,7 +13,7 @@ import yaml
 import click
 import requests
 
-from dgparse.genbank import parse as genbank
+import dgparse
 
 import dgcli.genomebrowser as gb
 from dgcli.genomebrowser import GB_MODELS
@@ -31,7 +31,7 @@ with open(RC_PATH, 'r') as rc_file:
 
 # Check the ENV for any local overrides
 CONFIG.update(os.environ)
-BIODATA = CONFIG.get('BIODATA', '/opt/biodata')
+BIODATA = CONFIG.get('biodata_root', '/opt/biodata')
 
 # Derived Constants
 RPC_URL = os.path.join(CONFIG['target_server'], 'rpc')
@@ -66,7 +66,7 @@ def load_design_file(design_file_name):
     """Parse and prepare the DnaDesign Object"""
     design_filepath = os.path.join(BIODATA, 'dnadesigns', design_file_name)
     with open(design_filepath) as dnadesign_file:
-        data = genbank(dnadesign_file)[0]
+        data = dgparse.genbank.parse(dnadesign_file)[0]
         data['sha1'] = data['sequence']['sha1']
         data['sequence'] = data['sequence']['seq']
         data.pop('file_contents')
@@ -242,11 +242,10 @@ def append_targets(spec_file_path, target_file, output, update):
 @cli.command()
 @click.argument('file_path', type=click.Path())
 @click.option('--output', default=sys.stdout, type=click.File())
-def upload_files(file_path, output):
+def upload(file_path, output):
     """Upload a file to the inventory or designs"""
-
-    schema_path = CONFIG['schema']
-    convention_path = CONFIG['file_convention']
+    schema_path = os.path.join(BIODATA, 'remote_schema.json')
+    convention_path = os.path.join(BIODATA, 'file_convention.yaml')
 
     valid_files = inv.upload_files(file_path, schema_path, convention_path)
 

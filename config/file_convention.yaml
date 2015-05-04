@@ -1,6 +1,5 @@
-# Defines how the contents of files should map to the objects
+# This file configures how the contents of files should map to the objects
 genbank_plasmid:  # Local object name
-  # Identify which files are int
   type: dnamolecule
   file_pattern:
     regex: '(EB)(\d+)[\s\_]([\w\-\s]+)\.(gb|gbk|genbank)'
@@ -9,8 +8,8 @@ genbank_plasmid:  # Local object name
       - accession
       - name
       - file_format
-  # so what's in here? Declare what should be in here
   parser: "genbank"  # associate the genbank parser
+  # so what's in here? Declare what should be in here
   contents:
     sequence: dnamoleculesequence
     features: dnamolecule_dnafeatures
@@ -39,8 +38,7 @@ sequence_file:
       - dnamolecule.accession
       - name
       - format
-  parser: "blob"  #do not parse
-
+  parser: "blob"  # do not parse
   requires:  # tells system to load others first
     - genbank_plasmid
     - snapgene_plasmid

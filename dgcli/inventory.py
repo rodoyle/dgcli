@@ -8,14 +8,17 @@ from __future__ import absolute_import
 from __future__ import unicode_literals
 
 import json
+import logging
 import os
-import yaml
 import re
+import yaml
 from collections import namedtuple
 
 import requests
-
+from click import echo
 import dgparse
+
+log = logging.getLogger(__name__)
 
 INVENTORY_CRUD = 'api/inventory/crud'
 UPLOAD_URL = 'api/inventory/upload'
@@ -95,20 +98,6 @@ def get_or_create_object(endpoint, credentials, object_type, object_data):
         return resp.json()['read']['id']
 
 
-def build_local(local_root):
-    """Initialize the local registry"""
-    local_registry = {}
-    for root, dirs, files in os.walk(local_root):
-        for name in files:
-            extension = os.path.splitext(name)
-            if extension in EXTENSION_MAPPING:
-                model = EXTENSION_MAPPING[extension]
-                # map unique constraints to file path
-                key = tuple([model].extend(UNIQUE_CONSTRAINTS[model]))
-                local_registry[key] = os.path.join(root, name)
-    return local_registry
-
-
 def _generate_key(tablename, object):
     """Generate a deduplication key for the object"""
     key = [tablename]
@@ -136,9 +125,9 @@ def fetch_remote(requestor, models):
         tablename = query['object']
         resp = requestor(query)
         data = resp.json()['read']
-        for object in data:
-            key = _generate_key(tablename, object)
-            remote[key] = data['id']  #only keep the ID.
+        for obj in data:
+            key = _generate_key(tablename, obj)
+            remote[key] = data['id']  # only keep the ID.
     return remote
 
 
@@ -199,30 +188,12 @@ def find_new(local, remote):
                         data[relation + '_id'] = remote[relation_key]
                     elif (relation_key in local) and isinstance(local[relation_key], int):
                         data.pop(relation)  # remove the relation
-                        data[relation + '_id'] = local[relation_key] #replace with xref
+                        data[relation + '_id'] = local[relation_key] # replace with xref
                     else:
                         local[relation_key] = data[relation]
                 local[key] = data
 
     # local should only contain new items now.
-
-
-def sync(requestor, local_root, schema):
-    """
-    Given a repistory root and a remote server, traverse the repository
-    and compare the contents to the remote server to get a list of objects to
-    be pushed, grouped by table.
-
-    :param requestor: An object capable of making post requests.
-    :param local_root:
-    :param remote:
-    :return:
-    """
-    local = build_local(local_root)
-    remote = fetch_remote(requestor, schema['parse_order'])
-    find_new(local, remote)  #modify in place
-    push_remote(requestor, local, remote)
-
 
 
 def get_file_conventions(conf_path):
@@ -234,11 +205,11 @@ def get_file_conventions(conf_path):
 
     validators = list()
     for identifier, params in conf.iteritems():
-        regex = re.compile(params['file_pattern']['regex'])
         name_tokens = params['file_pattern']['attributes']
+        pattern = params['file_pattern']['regex']
 
         def validator(filename):
-            match_obj = regex.match(filename)
+            match_obj = re.match(filename, pattern)
             if match_obj:
                 data = {attr: match_obj.group(idx) for idx, attr in enumerate(name_tokens)}
                 params.pop('file_pattern')
@@ -257,16 +228,13 @@ def upload_files(local_root, schema_path, file_conv_path):
         schema = json.load(sp)
 
     validators = get_file_conventions(file_conv_path)
-
     for root, dirs, files in os.walk(local_root):
         for name in files:
+            echo("inspecting {0}".format(name))
             for v in validators:
                 abspath = os.path.join(root, name)
                 valid_data = v(name)
                 if valid_data:
                     url = schema['definitions'][valid_data.type]['upload_url']
+
                     yield (url, abspath)
-
-
-
-
