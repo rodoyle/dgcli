@@ -238,6 +238,26 @@ def append_targets(spec_file_path, target_file, output, update):
     else:
         json.dump(specs, output, indent=2)
 
+
+@cli.command()
+@click.argument('file_path', type=click.Path())
+@click.option('--output', default=sys.stdout, type=click.File())
+def upload_files(file_path, output):
+    """Upload a file to the inventory or designs"""
+
+    schema_path = CONFIG['schema']
+    convention_path = CONFIG['file_convention']
+
+    valid_files = inv.upload_files(file_path, schema_path, convention_path)
+
+    for url, payload in valid_files:
+        if 'crud' in url:
+            utils.make_post(url, CREDENTIALS, payload, output, click.echo)
+        else:
+            utils.make_file_upload_request(url, CREDENTIALS, file_path,
+                                           output, click.echo)
+
+
 if __name__ == '__main__':
     cli()
 
