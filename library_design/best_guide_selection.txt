@@ -1,0 +1,36 @@
+CRITERIA FOR SELECTING THE ‘BEST’ GUIDES:
+
+G = non-coding off-target hits << LEAST IMPORTANT
+D = on-target Doench score             V
+C = coding off-target hits     <<  MOST IMPORTANT
+
+find n guides in consensus exon
+    if n > 100:
+        top 10% G
+        top 10% D
+        top 10% C
+      then
+        top 25% G
+        top 10% D
+        top 10% C
+      then
+        top 25% G
+        top 25% D
+        top 10% C
+    else:           1>>>>>>>>>>>>>>4
+        top 25% G | 25 | 50 | 50 | 50
+        top 25% D | 25 | 25 | 50 | 50
+        top 25% C | 25 | 25 | 25 | 50
+
+then if 2nd consensus exon has score >66% of 1st:
+    do same as previous
+
+    else back to consensus exon:
+        top G% | 75 | 75 | 75
+        top D% | 50 | 75 | 75
+        top C% | 50 | 50 | 75
+
+if all guides are in 3’ 1/3 of gene (due to 3’ consensus exon):
+    remove 2x 3’-most guides and redo search for these 2 guides using first 1/3 of CDS
+
+if any are still <5, do by hand   
