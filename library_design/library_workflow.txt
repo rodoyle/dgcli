@@ -1,0 +1,23 @@
+Library Creation
+
+1. Gene list obtained from client 
+  -> clean up to form canonical gene list (embl ids)
+    -> get gene sequences and CDS annotations
+
+2. Locate/ Filter guides - use Ensembl sequences/annotations
+
+
+3. Score exons/ score guides
+  -> score exons - find most commonly expressed consensus exon(s)
+  -> on-target scoring - use Doench tool
+  -> off-target scoring:
+    -> find guide matches in genome (allowing for up to 4 mismatches)
+    -> apply MIT (Zhang) off-target scoring algorithm
+
+4. Select guides
+  -> use scores and location to find best guides
+
+5. Guide list output for client
+  -> provide client with csv guide list and calculated parameters
+  -> some sort of visual representation:
+    my idea was a per-gene graphic showing guide position within CDS and scores
