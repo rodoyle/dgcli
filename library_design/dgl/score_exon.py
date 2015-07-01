@@ -1,4 +1,5 @@
 import click
+import re
 
 STRAND = {'+':'1',
           '-':'-1'}
@@ -29,7 +30,7 @@ def score_exons(gene_list, cds_list, outfile):
         exons = []
         if gene_cdss:
             for cds in gene_cdss:
-                for position in cds[4:6]:
+                for position in cds[3:5]:
                     exons.append(int(position))
             scores = [0] * (max(exons)-min(exons)+1)
             for exon in range(0,len(exons),2):
@@ -48,11 +49,11 @@ def score_exons(gene_list, cds_list, outfile):
                         continue
                     else:
                         exon_score = float(start_score)/float(max_score)
-                        common.append([gene[0], 
-                                       gene[1], 
+                        common.append([gene[1], 
+                                       gene[2], 
                                        str(start+min(exons)), 
                                        str(n+1+min(exons)),
-                                       gene[4], 
+                                       gene[5], 
                                        str(start_score),
                                        "%.2f" % exon_score])
                         start = 0
@@ -77,25 +78,18 @@ def add_exon_score(exon_list, guide_list, outfile):
     with open(guide_list) as file:
         contents = file.readlines()
     all_guides = [line.strip().split('\t') for line in contents]
-    columns = len(all_guides[0])
+    columns = len(all_guides[1])
     for guide in all_guides[1:]:
         for exon in all_exons:
-            if exon[0] == guide[1]:
-                if guide[4] == '1':
-                    cut_site = int(guide[3]) + 21
-                elif guide[4] == '-1':
-                    cut_site = int(guide[3]) + 9
+            if exon[0] == guide[2]:
+                if guide[5] == '1':
+                    cut_site = int(guide[4]) + 21
+                elif guide[5] == '-1':
+                    cut_site = int(guide[4]) + 9
                 if cut_site >= int(exon[2]) and cut_site < int(exon[3])+1:
                     if len(guide) == columns:
                         guide.append(exon[6])
                         guide.append(exon[4])
-                    #elif len(guide) == columns+1:
-                    #    if guide[4] == '1':
-                    #        if exon[6] > guide[columns]:
-                    #            guide[columns] = exon[6]
-                    #    if guide[4] == '-1':
-                    #        if exon[6] > guide[columns]:
-                    #            guide[columns] = exon[6]
     for guide in all_guides[1:]:
         if len(guide) == columns:
             guide.append('0')
@@ -108,7 +102,9 @@ def add_exon_score(exon_list, guide_list, outfile):
     with open(outfile, 'w') as file:
         file.write('\n'.join(lines))
 
-def gc_content(guide_list, outfile):
+@cli.command()
+@click.argument('guide_list')
+def gc_content(guide_list):
     """
     add gc content (percent) column to guide list
     """
@@ -117,9 +113,9 @@ def gc_content(guide_list, outfile):
     all_guides = [line.strip().split('\t') for line in contents]
     for guide in all_guides[1:]:
         if guide[5] == '1':
-            guide_seq = guide[8][4:24]
+            guide_seq = guide[6][4:24]
         elif guide[5] == '-1':
-            guide_seq = guide[8][6:26]
+            guide_seq = guide[6][6:26]
         score = []
         for base in guide_seq:
             if base == 'G' or base == 'C':
@@ -130,6 +126,99 @@ def gc_content(guide_list, outfile):
     lines = []
     for i in all_guides:
         lines.append('\t'.join(i))
+    outfile = guide_list.split('.')[0] + '_gc.txt'
+    with open(outfile, 'w') as file:
+        file.write('\n'.join(lines))
+
+@cli.command()
+@click.argument('guide_list')
+def uuu_guides(guide_list):
+    """
+    determine if guide contains uuu sequence
+    """
+    with open(guide_list) as file:
+        contents = file.readlines()
+    all_guides = [line.strip().split('\t') for line in contents]
+    for guide in all_guides[1:]:
+        if guide[5] == '1':
+            guide_seq = guide[6][4:24]
+            guide.append(str(len(re.findall('TTT', guide_seq))))
+        elif guide[5] == '-1':
+            guide_seq = guide[6][6:26]
+            guide.append(str(len(re.findall('AAA', guide_seq))))
+    all_guides[0].append('uuu_present')
+    lines = []
+    for i in all_guides:
+        lines.append('\t'.join(i))
+    outfile = guide_list.split('.')[0] + '_uuu.txt'
+    with open(outfile, 'w') as file:
+        file.write('\n'.join(lines))
+
+@cli.command()
+@click.argument('guide_list')
+def g_after_pam(guide_list):
+    """
+    determine how many Gs are after pam sequence
+    """
+    with open(guide_list) as file:
+        contents = file.readlines()
+    all_guides = [line.strip().split('\t') for line in contents]
+    for guide in all_guides[1:]:
+        if guide[5] == '1':
+            after_pam = guide[6][27:]
+            n = 0
+            for g in range(1, len(after_pam)+1):
+                if after_pam[:g] == 'G'*g:
+                    n = g
+            guide.append(str(n))
+        elif guide[5] == '-1':
+            after_pam = guide[6][:3]
+            n = 0
+            for g in range(0, len(after_pam))[::-1]:
+                if after_pam[g:] == 'C'*(len(after_pam)-g):
+                    n = 3-g
+            guide.append(str(n))
+    all_guides[0].append('gs_after_pam')
+    lines = []
+    for i in all_guides:
+        lines.append('\t'.join(i))
+    outfile = guide_list.split('.')[0] + '_gap.txt'
+    with open(outfile, 'w') as file:
+        file.write('\n'.join(lines))
+
+@cli.command()
+@click.argument('guide_list')
+def g_start(guide_list):
+    """
+    determine how many Gs (0,1 or 2) are at the start of the guide
+    """
+    with open(guide_list) as file:
+        contents = file.readlines()
+    all_guides = [line.strip().split('\t') for line in contents]
+    for guide in all_guides[1:]:
+        if guide[5] == '1':
+            guide_start = guide[6][4:6]
+            if guide_start[0] == 'G':
+                n='1'
+            if guide_start == 'GG':
+                n='2'
+            if guide_start.find('G') == -1:
+                n='0'
+            guide.append(n)
+        elif guide[5] == '-1':
+            guide_start = guide[6][24:26]
+            if guide_start[1] == 'C':
+                n='1'
+            if guide_start == 'GG':
+                n='2'
+            if guide_start.find('C') == -1:
+                n='0'
+            guide.append(n)
+    all_guides[0].append('gs_at_start')
+    lines = []
+    for i in all_guides:
+        lines.append('\t'.join(i))
+    outfile = guide_list.split('.')[0] + '_gstart.txt'
     with open(outfile, 'w') as file:
         file.write('\n'.join(lines))
 

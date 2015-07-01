@@ -10,8 +10,9 @@ RAT_CHROMOSOMES = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10',
                '11', '12', '13', '14', '15', '16', '17', '18', '19', '20',
                'X', 'MT']
 
-GUIDE_PATTERN = "(?=([ACGT]{24}[ACTG][AG]G[ACGT]{3}))"
-REVERSE_GUIDE_PATTERN = "(?=([ACGT]{3}C[TC][ACGT][ACTG]{24}))"
+# NGG PAMs only
+GUIDE_PATTERN = "(?=([ACGT]{24}[ACTG]GG[ACGT]{3}))"
+REVERSE_GUIDE_PATTERN = "(?=([ACGT]{3}CC[ACGT][ACTG]{24}))"
 
 STRAND = {'+':'1',
           '-':'-1'}
