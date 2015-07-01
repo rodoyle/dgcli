@@ -295,8 +295,10 @@ def mit_offtarget_score(offt_list):
             total_distance = 0.0
             if offt['pam'][1:3] == 'GG':
                 score = 1.0
+                score1 = 1.0
             elif offt['pam'][1:3] == 'AG':
                 score = 0.2
+                score1 = 0.2
             if mismatch_count == 0:
                 offt['offt_score'] = score
             else:

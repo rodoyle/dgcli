@@ -78,21 +78,23 @@ def get_annotations_gtf(embl_gtf, gene_list, embl):
             if len(ann_dict[anno][1]) < 3: # on chr not non-chr contigs
                 if embl == False:
                     if ann_dict[anno][0] == 'gene':
-                        if ann_dict[anno][5]['gene_name'] == gene:
-                            gene_details.append([gene,
-                                                 ann_dict[anno][5]['gene_id'],
+                        if ann_dict[anno][5].get('gene_name'):
+                            if ann_dict[anno][5]['gene_name'] == gene:
+                                gene_details.append([gene,
+                                                     ann_dict[anno][5]['gene_id'],
+                                                     ann_dict[anno][1],
+                                                     str(ann_dict[anno][2]),
+                                                     str(ann_dict[anno][3]),
+                                                     ann_dict[anno][4]])
+                    elif ann_dict[anno][0] == 'CDS':
+                        if ann_dict[anno][5].get('gene_name'):
+                            if ann_dict[anno][5]['gene_name'] == gene:
+                                cds_list.append([gene,
+                                                 anno,
                                                  ann_dict[anno][1],
                                                  str(ann_dict[anno][2]),
                                                  str(ann_dict[anno][3]),
                                                  ann_dict[anno][4]])
-                    elif ann_dict[anno][0] == 'CDS':
-                        if ann_dict[anno][5]['gene_name'] == gene:
-                            cds_list.append([gene,
-                                             anno,
-                                             ann_dict[anno][1],
-                                             str(ann_dict[anno][2]),
-                                             str(ann_dict[anno][3]),
-                                             ann_dict[anno][4]])
                 else:
                     if ann_dict[anno][0] == 'gene':
                         if ann_dict[anno][5]['gene_id'] == gene:
