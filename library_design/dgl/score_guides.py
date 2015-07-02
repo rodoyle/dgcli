@@ -132,7 +132,7 @@ def offtarget_search_bowtie(fasta_in, sam_prefix, index_prefix, chromosome_const
                  '-S', # output is sam
                  '-n', str(mm), # allow mismatches
                  '-p', '8', # parallel search threads
-                 '-k', '100', # allow 10 alignments per read
+                 '-k', '10000', # allow 1000 alignments per read
                  '-y', # slow, comprehensive search
                  '-e', '1000', # combined phred score of mismatches to reject alignment
                  sam_prefix + chr + '.sam'])
@@ -316,50 +316,6 @@ def mit_offtarget_score(offt_list):
                     offt['offt_score'] = score
     return offt_list
 
-
-def is_coding_chr(cds_list, offt_list, chromosome_constant, nt=15):
-    """
-    determine if off-target hits cut in CDS regions
-    appends each chromosome to offt outfile as this takes a while...
-    """
-    with open(cds_list) as file:
-        contents = file.readlines()
-    all = [line.strip().split('\t') for line in contents if line.startswith('#')==False]
-    all_cdss = [anno for anno in all if anno[2] == 'CDS']
-    del all
-    all_offt = offt_list
-    columns = len(all_offt[0])
-    f = open('off_target_hitlist.txt', 'w')
-    f.close()
-    offt_coding = []
-    chromosomes = getattr(library_constants, chromosome_constant)
-    for chr in chromosomes:
-        chr_cdss = [cds for cds in all_cdss if cds[0] == chr]
-        chr_offt = [offt for offt in all_offt if offt[1] == chr]
-        for offt in chr_offt:
-            if offt[3] == '1':
-                cut_site = int(offt[2]) + int(nt)-5
-            elif offt[3] == '-1':
-                cut_site = int(offt[2]) + 5
-            for cds in chr_cdss:
-                if len(offt) > columns:
-                    break
-                elif len(offt) == columns:
-                    if cut_site >= int(cds[3]):
-                        if cut_site <= int(cds[4]):
-                            offt.append('1')
-        for offt in chr_offt:
-            if len(offt) == columns:
-                offt.append('0')
-            offt_coding.append(offt)
-        lines = []
-        for i in chr_offt:
-            lines.append('\t'.join(i))
-        with open('off_target_hitlist.txt', 'a') as file:
-            file.write('\n'.join(lines))
-            file.write('\n')
-    return offt_coding
-
 def is_coding_fast(biodata, embl_gtf, offt_list, nt=15):
     """
     uses Matt's colocator script to quickly seach fo overlapping regions
@@ -375,6 +331,12 @@ def is_coding_fast(biodata, embl_gtf, offt_list, nt=15):
                                          anns[cds][4],
                                          anns[cds][5]['gene_id']]))
     with open('cds_list.csv', 'w') as file:
+        file.write(','.join(['chromosome_name',
+                             'start',
+                             'end',
+                             'strand',
+                             'label'
+                             ]) + '\n')
         file.write('\n'.join(set(cds_list)))
     off_t_list = []
     offt_dict = {}
@@ -391,13 +353,23 @@ def is_coding_fast(biodata, embl_gtf, offt_list, nt=15):
                                            offt['strand'],
                                            offt_id]))
     with open('offt_list.csv', 'w') as file:
+        file.write(','.join(['chromosome_name',
+                             'start',
+                             'end',
+                             'strand',
+                             'label'
+                             ]) + '\n')
         file.write('\n'.join(off_t_list))
-    subprocess.call(['colocator',
-                     '--search', 'offt_list.csv',
-                     '--target', 'cds_list.csv',
-                     '--output', 'offt_colo.csv',
-                     '--ignore-strand' # only look at coordinates to judge overlap
-                     ])
+    outfile = open('offt_colo.csv', 'w')
+    subprocess.check_call(
+        ['colocator',
+         '--search', 'offt_list.csv',
+         '--target', 'cds_list.csv',
+         #'--output', 'offt_colo.csv',
+         '--ignore-strand', '1', # only look at coordinates to judge overlap
+         ],
+         stdout=outfile)
+    outfile.close()
     with open('offt_colo.csv', 'r') as file:
         contents = file.readlines()
     offtcs = [i.strip().split(',') for i in contents]

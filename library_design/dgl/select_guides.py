@@ -22,30 +22,33 @@ def guide_selection(guide_list, outfile, n_guides, spread):
     all_guides = [line.strip().split('\t') for line in contents]
     #remove high off-targets
     left_guides = []
+    columns = {col:n for n,col in enumerate(all_guides[0])}
+    import pdb; pdb.set_trace()
     for guide in all_guides[1:]:
-        if float(guide[9]) == 0.0 and float(guide[10]) <=0.2:
-            if float(guide[15]) <= 1.0:
+        if float(guide[columns['coding_offt']]) == 0.0 and\
+           float(guide[columns['genomic_offt']]) <=0.2:
+            if float(guide[columns['self_offt']]) == 1.0:
                 left_guides.append(guide)
     lines = ['\t'.join(all_guides[0])]
     for i in left_guides:
         lines.append('\t'.join(i))
     with open('approved_guides.txt', 'w') as file:
         file.write('\n'.join(lines))
-    genes = set([guide[2] for guide in all_guides[1:]])
+    genes = set([guide[columns['gene_id']] for guide in all_guides[1:]])
     black_swans = []
     for gene in genes:
-        left_gene_guides = [guide for guide in left_guides if guide[2] == gene]
+        left_gene_guides = [guide for guide in left_guides if guide[columns['gene_id']] == gene]
         #right_gene_guides = [guide for guide in right_guides if guide[1] == gene]
-        cut_sites=[]
+        cut_sites = []
         bs = []
         doench_sorted = sorted(left_gene_guides, key=itemgetter(7))
         s = int(spread)
         for guide in reversed(doench_sorted):
             if len(cut_sites) < int(n_guides):
-                if guide[5] == '1':
-                    cut_site = int(guide[4]) + 21
-                elif guide[5] == '-1':
-                    cut_site = int(guide[4]) + 9
+                if guide[columns['strand']] == '1':
+                    cut_site = int(guide[columns['abs_start']]) + 21
+                elif guide[columns['strand']] == '-1':
+                    cut_site = int(guide[columns['abs_start']]) + 9
                 if len(cut_sites) == 0:
                     bs.append(guide)
                     cut_sites.append([cut_site-s, cut_site+s])
