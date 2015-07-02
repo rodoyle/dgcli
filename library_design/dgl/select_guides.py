@@ -4,6 +4,11 @@ import re
 import math
 import click
 
+for i in new_guidelist:
+    lines.append(','.join(j for j in i))
+
+
+
 from dgl import library_constants
 from operator import itemgetter
 
