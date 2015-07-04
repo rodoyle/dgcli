@@ -1,4 +1,7 @@
-"""System level test of the guide services
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+"""
+Command line interface to the DeskGen Genome Editing Platform.
 """
 
 from __future__ import unicode_literals
@@ -13,7 +16,8 @@ import yaml
 import click
 import requests
 
-import dgparse
+import dgparse.snapgene as snapgene
+from dgparse.exc import ParserException
 
 import dgcli.genomebrowser as gb
 from dgcli.genomebrowser import GB_MODELS
@@ -256,13 +260,27 @@ def upload(file_path, output):
             utils.make_file_upload_request(url, CREDENTIALS, file_path,
                                            output, click.echo)
 
+@cli.command('extract')
+@click.argument('source', type=click.STRING, nargs=-1)
+@click.option('--model', type=click.Choice(inv.RELATIONS.iterkeys()), default='dnafeature')
+@click.option('--output', type=click.File(), default=sys.stdout)
+def extract_cmd(source, model, output):
+    """
+    Extract all instances of a model from a set of files matching a pattern.
+    :param object_type:
+    :return:
+    """
+    for fname in source:
+        msg = "Parsing file {0}".format(fname)
+        click.echo(msg)
+        with open(fname, 'r') as snapfile:
+            try:
+                parsed_data = snapgene.parse(snapfile)
+                click.echo(pprint.pprint(parsed_data))
+            except ParserException:
+                click.echo("Error Parsing {0}".format(fname), err=True)
+                raise
+
 
 if __name__ == '__main__':
     cli()
-
-
-
-
-
-
-
