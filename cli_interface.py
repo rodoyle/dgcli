@@ -275,8 +275,8 @@ def extract_cmd(source, model, output):
         click.echo(msg)
         with open(fname, 'r') as snapfile:
             try:
-                parsed_data = snapgene.parse(snapfile)
-                click.echo(pprint.pprint(parsed_data))
+                adapted_data = snapgene.parse(snapfile)
+                click.echo(pprint.pprint(adapted_data))
             except ParserException:
                 click.echo("Error Parsing {0}".format(fname), err=True)
                 raise
