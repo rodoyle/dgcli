@@ -50,10 +50,6 @@ def add_snps(fasta, chrom, snp_vcf):
                         snp[1],
                         snp[2],
                         fasta[int(snp[1])-1]))
-    #with open('snps_chr.{}.fasta'.format(chrom), 'w') as fasta_file:
-    #    fasta_file.write('>SNPed_chr{}\n{}\n'.format(
-    #                        chrom,
-    #                        fasta,))
     if len(dodgy) > 0:
         with open('incorrect_snps.txt', 'a') as error_file:
             error_file.write('\n'.join(dodgy) + '\n')
@@ -76,9 +72,9 @@ def add_indels_with_mapping(fasta, chrom, indel_vcf):
         # ensure cooordinate is within chromosome length
         if int(indel[1]) <= len(fasta):
             indel_start = int(indel[1]) -1
-            indel_end = int(indel[1]) + len(indel[3])
+            indel_end = int(indel[1]) + len(indel[3]) -1
             if fasta[indel_start:indel_end] == indel[3]:
-                fasta = fasta[:indel_start] + indel[4] + fasta[indel_end - 1:]
+                fasta = fasta[:indel_start] + indel[4] + fasta[indel_end:]
                 map.append([indel[0],
                             indel[1],
                             str(len(indel[4]) - len(indel[3]))
@@ -91,8 +87,6 @@ def add_indels_with_mapping(fasta, chrom, indel_vcf):
                         indel[1],
                         indel[2],
                         fasta[indel_start:indel_end]))
-    #with open('snps_indels_chr.{}.fasta'.format(chrom), 'w') as fasta_file:
-    #    fasta_file.write('>SNPed_INDELed_chr{}\n{}\n'.format(chrom, fasta))
     if len(dodgy) > 0:
         with open('incorrect_indels.txt', 'a') as error_file:
             error_file.write('\n'.join(dodgy) + '\n')
@@ -146,6 +140,7 @@ def add_snps_indels(snp_vcf, indel_vcf, chromosome_constant, chrom_dir, genome_n
 @click.argument('genome_name')
 def add_snps_indels_cli(snp_vcf, indel_vcf, chromosome_constant, chrom_dir, genome_name):
     add_snps_indels(snp_vcf, indel_vcf, chromosome_constant, chrom_dir, genome_name)
+    subprocess.call('gzip', '*.fasta')
 
 if __name__ == '__main__':
     cli()
