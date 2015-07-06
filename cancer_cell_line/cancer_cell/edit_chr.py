@@ -1,8 +1,9 @@
 import subprocess
+import os
 
-from Bio import SeqIO
+from dgl import library_constants
 
-def fasta_single_seq_parser(fasta_file):
+def fasta_single_seq_parser(fasta_file, fasta_dir):
     """
     return a single fasta sequence as a string for a single-sequence fasta file
     e.g. a chromosome sequence
@@ -11,11 +12,11 @@ def fasta_single_seq_parser(fasta_file):
     """
     if fasta_file.endswith('.gz'):
         subprocess.call(
-            ['gzip', '-d', '-k', fasta_file]
+            ['gzip', '-d', '-k', fasta_dir + fasta_file]
         )
-        fasta_name = fasta_file.split('.gz')[0]
+        fasta_name = fasta_dir + fasta_file.split('.gz')[0]
     else:
-        fasta_name = fasta_file
+        fasta_name = fasta_dir + fasta_file
     with open(fasta_name) as file:
         fasta_lines = file.readlines()
     fasta_seq = ''
@@ -24,31 +25,35 @@ def fasta_single_seq_parser(fasta_file):
     return fasta_seq
 
 
-def add_snps(fasta_file, chr, genome, snp_table):
+def add_snps(fasta_file, chrom, snp_vcf, chrom_dir):
     """
     use caveman.vcf-type file to apply SNPs to
     chromosome sequence
     """
-    fasta = fasta_single_seq_parser(fasta_file)
+    fasta = fasta_single_seq_parser(fasta_file, chrom_dir)
     dodgy = []
-    with open(snp_table) as file:
+    with open(snp_vcf) as file:
         contents = file.readlines()
-    snps = [line.strip().split('\t') for line in contents if line.startswith(chr + '\t') == True]
+    snps = [line.strip().split('\t') for line in contents
+            if line.startswith(chrom + '\t') == True]
     for snp in snps:
         if int(snp[1]) <= len(fasta):
             if fasta[int(snp[1])-1] == snp[3]:
                 fasta = fasta[0:int(snp[1])-1] + snp[4] + fasta[int(snp[1]):]
             else:
                 dodgy.append(
-                    'incorrect reference sequence: ' + snp[0] + ' ' + snp[1] + ' ' + snp[2] + ' ' + fasta[int(snp[1])-1])
-    fasta_file = open('chr' + chr + '_' + genome + '_snps.flat', 'w')
-    #fasta_file.write('>SNPed_chr' + chr + '_' + genome + '\n' + fasta + '\n')
-    fasta_file.write(fasta)
-    fasta_file.close()
+                    'incorrect reference sequence: chr{} @{} VCF:{} fasta:{}'.format(
+                        snp[0],
+                        snp[1],
+                        snp[2],
+                        fasta[int(snp[1])-1]))
+    with open('chr{}_snps.flat'.format(chrom), 'w') as fasta_file:
+        fasta_file.write('>SNPed_chr{}\n{}\n'.format(
+                            chrom,
+                            fasta,))
     if len(dodgy) > 0:
-        error_file = open('chr' + chr + '_' + genome + '_incorrect_snps.txt', 'w')
-        error_file.write('\n'.join(dodgy))
-        error_file.close()
+        with open('incorrect_snps.txt', 'a') as error_file:
+            error_file.write('\n'.join(dodgy) + '\n')
 
 def map_indels(chr_fasta, chr, genome, indel_table, outfile_prefix):
     """
@@ -89,14 +94,20 @@ def map_indels(chr_fasta, chr, genome, indel_table, outfile_prefix):
     map_file.write('\n'.join(map_line))
     map_file.close()
 
-def for_all_chr():
-    chromosomes = os.listdir('.')
-    for n,chr in enumerate(chromosomes[1:]):
-        #subprocess.call(['gzip', '-d', chr])
-        #chr_unzip = chr.split('.gz')
-        chr_n = chr.split('chr')
-        chr_no = chr_n[1].split('.')
-        add_snps(chr, chr_no[0], 'GRCh38', '../A375_GRCh38.p2_remap_caveman.vcf')
+
+
+
+def add_snps_indels_cli(snp_file, indel_file, chromosome_constant, chrom_dir):
+    chromosomes = getattr(library_constants, chromosome_constant)
+    chrom_files = os.listdir(chrom_dir)
+    for chrom in chromosomes:
+        chrom_file = [file_name for file_name in chrom_files\
+                      if file_name.find('.{}.fa'.format(chrom)) > -1]
+        if len(chrom_file) != 1:
+            raise error('chromosome files are named incorrectly')
+        else:
+            add_snps(chrom_file[0], chrom, snp_vcf, chrom_dir)
+
 
 
 
