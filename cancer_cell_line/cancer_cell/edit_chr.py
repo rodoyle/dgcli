@@ -16,14 +16,20 @@ def fasta_single_seq_parser(fasta_file, fasta_dir):
     :return:
     """
     if fasta_file.endswith('.gz'):
+        zipped = True
         subprocess.call(
-            ['gzip', '-d', '-k', fasta_dir + fasta_file]
+            ['gzip', '-d', fasta_dir + fasta_file]
         )
         fasta_name = fasta_dir + fasta_file.split('.gz')[0]
     else:
+        zipped = False
         fasta_name = fasta_dir + fasta_file
     with open(fasta_name) as file:
         fasta_lines = file.readlines()
+    if zipped:
+        subprocess.call(
+            ['gzip', fasta_dir + fasta_name]
+        )
     fasta_seq = ''
     for line in fasta_lines[1:]:
         fasta_seq += line.strip()
@@ -31,8 +37,11 @@ def fasta_single_seq_parser(fasta_file, fasta_dir):
 
 def add_snps(fasta, chrom, snp_vcf):
     """
+    fasta is string input of chromsome seqence
+    chrom is string of chromosome name
+    snp_vcf is vcf file name for snps
     use caveman.vcf-type file to apply SNPs to
-    chromosome sequence
+    ref chromosome sequence
     """
     dodgy = []
     with open(snp_vcf) as file:
@@ -57,6 +66,9 @@ def add_snps(fasta, chrom, snp_vcf):
 
 def add_indels_with_mapping(fasta, chrom, indel_vcf):
     """
+    fasta is string input of chromsome seqence
+    chrom is string of chromosome name
+    indel_vcf is vcf file name for indels
     use pindel.vcf-type file to integrate INDELs into
     chromosome sequence and make a  cumulative map file
     to adjust feature coordinates.
@@ -85,7 +97,7 @@ def add_indels_with_mapping(fasta, chrom, indel_vcf):
                 'incorrect reference sequence: chr{} @{} VCF:{} fasta:{}'.format(
                         indel[0],
                         indel[1],
-                        indel[2],
+                        indel[3],
                         fasta[indel_start:indel_end]))
     if len(dodgy) > 0:
         with open('incorrect_indels.txt', 'a') as error_file:
@@ -125,7 +137,7 @@ def add_snps_indels(snp_vcf, indel_vcf, chromosome_constant, chrom_dir, genome_n
         with open('{}_ref_with_snps-indels.Chromosome.{}.fasta'.format(
                     genome_name,
                     chrom
-                    )) as outfile:
+                    ), 'w') as outfile:
             outfile.write('>{}_chr{}\n{}\n'.format(
                             genome_name,
                             chrom,
