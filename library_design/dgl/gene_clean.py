@@ -70,10 +70,12 @@ def get_annotations_gtf(embl_gtf, gene_list, embl):
     ann_dict = parse_gtf(embl_gtf)
     with open(gene_list) as file:
         contents = file.read()
-    genes = contents.strip().split('\r')
+    genes = set(contents.strip().split('\r'))
     cds_list = []
-    gene_details = []
+    anno_list = []
+    not_found = []
     for gene in genes:
+        gene_details = []
         for anno in ann_dict:
             if len(ann_dict[anno][1]) < 3: # on chr not non-chr contigs
                 if embl == False:
@@ -112,8 +114,12 @@ def get_annotations_gtf(embl_gtf, gene_list, embl):
                                              str(ann_dict[anno][2]),
                                              str(ann_dict[anno][3]),
                                              ann_dict[anno][4]])
+        if len(gene_details) == 0:
+            not_found.append(gene)
+        else:
+            anno_list += gene_details
     lines = []
-    for i in gene_details:
+    for i in anno_list:
         lines.append('\t'.join(i))
     file_name = gene_list.split('.')[0] + '_clean.txt'
     with open(file_name, 'w') as file:
@@ -124,6 +130,13 @@ def get_annotations_gtf(embl_gtf, gene_list, embl):
     file_name = gene_list.split('.')[0] + '_CDSs.txt'
     with open(file_name, 'w') as file:
         file.write('\n'.join(lines))
+    file_name = gene_list.split('.')[0] + '_not_found.txt'
+    with open(file_name, 'w') as file:
+        if len(not_found) == 0:
+            file.write('No Missing Genes')
+        else:
+            file.write('\n'.join(not_found))
+
 
 if __name__ == '__main__':
     cli()

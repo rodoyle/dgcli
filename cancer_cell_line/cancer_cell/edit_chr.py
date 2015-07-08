@@ -144,6 +144,8 @@ def add_snps_indels(snp_vcf, indel_vcf, chromosome_constant, chrom_dir, genome_n
                             indeled_fasta_seq
                             ))
 
+
+
 @cli.command()
 @click.argument('snp_vcf')
 @click.argument('indel_vcf')
@@ -152,7 +154,7 @@ def add_snps_indels(snp_vcf, indel_vcf, chromosome_constant, chrom_dir, genome_n
 @click.argument('genome_name')
 def add_snps_indels_cli(snp_vcf, indel_vcf, chromosome_constant, chrom_dir, genome_name):
     add_snps_indels(snp_vcf, indel_vcf, chromosome_constant, chrom_dir, genome_name)
-    subprocess.call('gzip', '*.fasta')
+    subprocess.call(['gzip', '*.fasta'])
 
 if __name__ == '__main__':
     cli()
