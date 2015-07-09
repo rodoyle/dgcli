@@ -238,3 +238,4 @@ def upload_files(local_root, schema_path, file_conv_path):
                     url = schema['definitions'][valid_data.type]['upload_url']
 
                     yield (url, abspath)
+
