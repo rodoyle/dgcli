@@ -21,6 +21,7 @@ setup(name='dgcli',
           'requests',
           'pyyaml',
           'xlrd',
+          'xlsxwriter',
       ],
       tests_require=[
           'tox',
