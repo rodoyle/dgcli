@@ -3,7 +3,7 @@
 #args[2]=bs_list
 #args[3]=cds_list
 setwd('~/Documents/deskgen_projects/guide_picker_plot')
-args=c('smarca4_guidelist_cds_pos.txt', 'muc_5_blackswans.txt', 'mouse_Smarca4_exon_scores.txt')
+args=c('smarca4_guidelist_cds_pos.txt', 'muc_5_blackswans.txt', 'Smarca4_protein_exon_scores.txt')
 
 
 #bs_guides <- read.table(file='cnio_blackswans.txt', header=T, sep="\t")
@@ -11,15 +11,15 @@ args=c('smarca4_guidelist_cds_pos.txt', 'muc_5_blackswans.txt', 'mouse_Smarca4_e
 #all_guides <- read.table(file=args[1], header=T, sep="\t")
 
 guides_all <- read.table(file=args[1], header=T, sep="\t")
-guides_bs <- read.table(file=args[2], header=T, sep="\t")
+#guides_bs <- read.table(file=args[2], header=T, sep="\t")
 cdss <- read.table(file=args[3], header=F, sep="\t")
-gene_list <- levels(guides_all[,2])
-pos = ncol(guides_all)
+#gene_list <- levels(guides_all[,2])
+#pos = ncol(guides_all)
 
 cds_pos_all = guides_all
-guides_bs = data.frame()
+#guides_bs = data.frame()
 cdss_list = cdss
-gene_list <- levels(guides_all[,1])
+#gene_list <- levels(guides_all[,1])
 
 draw_gene_graphs <- function(cds_pos_bs, cds_pos_all, cdss_list) {
   for (gene in levels(cds_pos_bs$gene_id)) {
@@ -89,6 +89,8 @@ draw_one_gene_graph_all_guides <- function(gene, cds_pos_all, cdss_list) {
 }
 
 draw_gene_graphs(guides_bs, guides_all, cdss)
+
+cdss_list[,7] = 1
 draw_one_gene_graph_all_guides('Smarca4', cds_pos_all, cdss_list)
 
 # On-target vs off-target scatter plot
@@ -109,7 +111,7 @@ pdf(paste('gene_pdfs/', gene,'_gpp.pdf', sep=''), width=7, height=7)
   plot(cds_pos_all$aggregate_offt, cds_pos_all$doench,
        xlim = c(0,1), ylim = c(0,1),
        xlab = 'Off-Target Aggregated Score', ylab = 'Doench On-Target Score',
-       pch = 18, col = 'ivory4', cex = 2)
+       pch = 18, col = 'azure4', cex = 2)
 dev.off()
 
 quantile(cds_pos_all[,17], probs=c(0, 0.5, 0.75, 0.9, 0.95, 0.99, 1))

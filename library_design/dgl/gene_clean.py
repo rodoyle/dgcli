@@ -55,11 +55,6 @@ def parse_gtf(embl_gtf):
                      ] = ann_info
     return gene_dict
 
-
-@cli.command()
-@click.argument('embl_gtf')
-@click.argument('gene_list')
-@click.argument('embl', default=False)
 def get_annotations_gtf(embl_gtf, gene_list, embl):
     """
     Extract gene and CDS annotations for all genes
@@ -70,7 +65,9 @@ def get_annotations_gtf(embl_gtf, gene_list, embl):
     ann_dict = parse_gtf(embl_gtf)
     with open(gene_list) as file:
         contents = file.read()
-    genes = set(contents.strip().split('\r'))
+    genes = set(contents.strip().split('\n'))
+    if len(genes) == 1:
+        genes = set(contents.strip().split('\r'))
     cds_list = []
     anno_list = []
     not_found = []
@@ -136,6 +133,59 @@ def get_annotations_gtf(embl_gtf, gene_list, embl):
             file.write('No Missing Genes')
         else:
             file.write('\n'.join(not_found))
+
+@cli.command()
+@click.argument('embl_gtf')
+@click.argument('gene_list')
+@click.argument('embl', default=False)
+def get_annotations_gtf_cli(embl_gtf, gene_list, embl):
+    get_annotations_gtf(embl_gtf, gene_list, embl)
+
+def find_ensembl_from_alias_human(gene_list):
+    with open('/home/neil/biodata/human_protein_coding_gene_alias.txt') as file:
+        contents = file.readlines()
+    alias = [i.strip().split('\t') for i in contents]
+    with open(gene_list) as file:
+        contents = file.read()
+    genes = contents.strip().split('\n')
+    ensembl = []
+    multiple = []
+    not_found = []
+    for gene in genes:
+        ensg = []
+        for ale in alias[1:]:
+            if gene in ale:
+                if ale[19].startswith('ENSG'):
+                    ensg.append([gene, ale[19]])
+                else:
+                    not_found.append(gene)
+                if len(ensg) != 0:
+                    multiple.append(gene)
+        if len(ensg) == 0:
+            not_found.append(gene)
+        else:
+            ensembl += ensg
+    file_name = gene_list.split('.')[0] + '_multiple_matches.txt'
+    with open(file_name, 'w') as file:
+        file.write('\n'.join(multiple) + '\n')
+    file_name = gene_list.split('.')[0] + '_not_found.txt'
+    with open(file_name, 'w') as file:
+        file.write('\n'.join(not_found) + '\n')
+    lines = '\n'.join([i[1] for i in ensembl])
+    file_name = gene_list.split('.')[0] + '_ensg_ids.txt'
+    with open(file_name, 'w') as file:
+        file.write(lines + '\n')
+    embl_gtf = '/home/neil/biodata/embl_annotations/Homo_sapiens.GRCh38.79.gtf'
+    get_annotations_gtf(embl_gtf, file_name, embl=True)
+
+@cli.command()
+@click.argument('gene_list')
+def find_ensembl_from_alias_human_cli(gene_list):
+    find_ensembl_from_alias_human(gene_list)
+
+
+
+
 
 
 if __name__ == '__main__':
