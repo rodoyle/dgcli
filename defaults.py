@@ -7,11 +7,6 @@ from __future__ import division
 from __future__ import absolute_import
 from __future__ import unicode_literals
 
-import functools
-import logging
-import itertools
-import operator
-
 DEFAULT_GENE = {"name": "PSMA4"}
 
 DEFAULT_GENOME = {'version': 'GRCh38.p2'}
