@@ -10,11 +10,13 @@ import json
 import logging
 import os
 import pprint
+import re
 import sys
 import yaml
 
 import click
 import requests
+import xlsxwriter
 
 import dgparse.snapgene as snapgene
 from dgparse.exc import ParserException
@@ -262,25 +264,29 @@ def upload(file_path, output):
 
 @cli.command('extract')
 @click.argument('source', type=click.STRING, nargs=-1)
-@click.option('--model', type=click.Choice(inv.RELATIONS.iterkeys()), default='dnafeature')
-@click.option('--output', type=click.File(), default=sys.stdout)
-def extract_cmd(source, model, output):
+@click.option('--output', default='extracted_dnafeatures.xlsx')
+def extract_cmd(source, output):
     """
     Extract all instances of a model from a set of files matching a pattern.
     :param object_type:
     :return:
     """
+    workbook = xlsxwriter.Workbook(output)
+    records = []
     for fname in source:
         msg = "Parsing file {0}".format(fname)
         click.echo(msg)
         with open(fname, 'r') as snapfile:
             try:
                 adapted_data = snapgene.parse(snapfile)
-                click.echo(pprint.pprint(adapted_data))
+                adapted_data['accession'] = re.match(r'(EB\d+)', fname)
+                adapted_data['name'] = os.path.basename(fname)
+                records.append(adapted_data)
             except ParserException:
                 click.echo("Error Parsing {0}".format(fname), err=True)
                 raise
-
+    # Make the Excel file
+    utils.write_to_xls(workbook, records)
 
 if __name__ == '__main__':
     cli()
