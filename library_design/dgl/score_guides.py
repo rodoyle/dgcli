@@ -360,7 +360,7 @@ def is_coding_fast(biodata, embl_gtf, offt_list, nt=15):
                              'label'
                              ]) + '\n')
         file.write('\n'.join(off_t_list))
-    outfile = open('offt_colo.csv', 'w')
+    out_file = open('offt_colo.csv', 'w')
     subprocess.check_call(
         ['colocator',
          '--search', 'offt_list.csv',
@@ -368,8 +368,8 @@ def is_coding_fast(biodata, embl_gtf, offt_list, nt=15):
          #'--output', 'offt_colo.csv',
          '--ignore-strand', '1', # only look at coordinates to judge overlap
          ],
-         stdout=outfile)
-    outfile.close()
+         stdout=out_file)
+    out_file.close()
     with open('offt_colo.csv', 'r') as file:
         contents = file.readlines()
     offtcs = [i.strip().split(',') for i in contents]
@@ -442,7 +442,7 @@ def off_target_score(guide_list, outfile, chromosome_constant, fasta_prefix, emb
     offtarget_search_bowtie('../guidelist.fasta', 'offt_alignment_chr',
                             biodata + index_prefix,
                             chromosome_constant, 
-                            2)
+                            3)
     offt_list = parse_bowtie_sam(biodata, fasta_prefix, guide_list, nt)
     offt_scored = mit_offtarget_score(offt_list)
     del offt_list
@@ -454,6 +454,41 @@ def off_target_score(guide_list, outfile, chromosome_constant, fasta_prefix, emb
         lines.append('\t'.join(i))
     with open(outfile, 'w') as file:
         file.write('\n'.join(lines))
+
+@cli.command()
+@click.argument('guide_file')
+@click.argument('index_prefix')
+@click.argument('fasta_prefix')
+@click.argument('embl_gtf')
+@click.argument('biodata', default='/home/neil/biodata/')
+def gecko_bowtie_search(guide_file, index_prefix, fasta_prefix, embl_gtf, biodata):
+    # with open(guide_file) as file:
+    #     contents = file.readlines()
+    # guides = [i.strip().split(',') for i in contents]
+    # with open('gecko_guides.fasta', 'w') as file:
+    #     for guide in guides[1:]:
+    #         file.write('>{}|{}\n'.format(guide[0], guide[1]))
+    #         file.write(guide[2] + '\n')
+    # with open('gecko_guidelist.txt', 'w') as file:
+    #     file.write('0\t0\t0\t0\t0\t1\tNNNN0NNNNNN\n')
+    #     for guide in guides[1:]:
+    #        file.write('{}|{}\t0\t0\t0\t0\t1\tNNNN{}NNNNNN\n'.format(
+    #            guide[0],
+    #            guide[1],
+    #            guide[2],
+    #        ))
+    # offtarget_search_bowtie('gecko_guides.fasta', # fasta in
+    #                        'offt_alignment_chr', # sam prefix
+    #                        biodata + index_prefix,
+    #                        'LADY_CHROMOSOMES',
+    #                        3)
+    offt_list = parse_bowtie_sam(biodata, fasta_prefix, 'gecko_guidelist.txt', '20')
+    offt_scored = mit_offtarget_score(offt_list)
+    offt_coding = is_coding_fast(biodata, embl_gtf, offt_scored, nt=20)
+    from pprint import pprint; import pdb; pdb.set_trace()
+
+
+
 
 if __name__ == '__main__':
     cli()

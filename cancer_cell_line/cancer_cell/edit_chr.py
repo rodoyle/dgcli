@@ -302,5 +302,47 @@ def add_snps_indels_cli(vcf_file, chromosome_constant, chrom_dir, genome_name):
 def edit_and_combine_vcf_cli(snp_vcf, indel_vcf, out_file):
     edit_and_combine_vcf(snp_vcf, indel_vcf, out_file)
 
+@cli.command()
+@click.argument('fastq_file')
+@click.argument('index_prefix')
+@click.argument('sam_prefix')
+@click.argument('chromosome_constant')
+def run_bowtie_fastq(fastq_file, index_prefix, sam_prefix, chromosome_constant):
+    chromosomes = getattr(library_constants, chromosome_constant)
+    for chrom in chromosomes:
+        subprocess.call(
+                ['bowtie', index_prefix + chrom, # specify index
+                 '-q', fastq_file, # input is fasta
+                 '-S', # output is sam
+                 '-n', '3', # allow mismatches
+                 '-p', '8', # parallel search threads
+                 '-k', '10000', # allow 1000 alignments per read
+                 # '-y', # slow, comprehensive search
+                 '-e', '1000', # combined phred score of mismatches to reject alignment
+                 sam_prefix + chrom + '.sam'])
+
+@cli.command()
+@click.argument('fasta_dir')
+def make_fasta_single_line(fasta_dir):
+    filenames = os.listdir(fasta_dir)
+    for fasta_file in filenames:
+        if fasta_file.endswith('.gz'):
+            subprocess.call(
+                ['gzip', '-d', fasta_dir + fasta_file]
+            )
+            fasta_name = fasta_dir + fasta_file.split('.gz')[0]
+        else:
+            fasta_name = fasta_dir + fasta_file
+        with open(fasta_name) as file:
+            fasta_lines = file.readlines()
+
+        fasta_seq = ''
+        for line in fasta_lines[1:]:
+            fasta_seq += line.strip()
+        with open(fasta_name, 'w') as file:
+            file.write(fasta_lines[0])
+            file.write(fasta_seq + '\n')
+
+
 if __name__ == '__main__':
     cli()

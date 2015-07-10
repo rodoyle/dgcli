@@ -154,16 +154,23 @@ def find_ensembl_from_alias_human(gene_list):
     for gene in genes:
         ensg = []
         for ale in alias[1:]:
-            if gene in ale:
-                if ale[19].startswith('ENSG'):
-                    ensg.append([gene, ale[19]])
-                else:
-                    not_found.append(gene)
-                if len(ensg) != 0:
-                    multiple.append(gene)
+            if len(ensg) <= 1:
+                if gene in ale:
+                    if ale[19].startswith('ENSG'):
+                        ensg.append([gene, ale[19]])
+                    else:
+                        not_found.append(gene)
+                    if len(ensg) != 0:
+                        multiple.append(gene)
+        if len(ensg) == 0:
+            for ale in alias[1:]:
+                if len(ensg) == 0:
+                    if ''.join(ale).find(gene) > -1:
+                        if ale[19].startswith('ENSG'):
+                            ensg.append([gene, ale[19]])
         if len(ensg) == 0:
             not_found.append(gene)
-        else:
+        elif len(ensg) == 1:
             ensembl += ensg
     file_name = gene_list.split('.')[0] + '_multiple_matches.txt'
     with open(file_name, 'w') as file:
@@ -183,6 +190,32 @@ def find_ensembl_from_alias_human(gene_list):
 def find_ensembl_from_alias_human_cli(gene_list):
     find_ensembl_from_alias_human(gene_list)
 
+@cli.command()
+@click.argument('genelist1')
+@click.argument('genelist2')
+def compare_gene_lists(genelist1, genelist2):
+    with open(genelist1) as file:
+        contents = file.readlines()
+    list1 = [i.strip().split('\t') for i in contents]
+    with open(genelist2) as file:
+        contents = file.readlines()
+    list2 = [i.strip().split('\t') for i in contents]
+    #list2_dict = {i[1]:i for i in list2}
+    genename2_list = [i[1] for i in list2]
+    intersection = []
+    only1 = []
+    only2 = []
+    for gene in list1:
+        if gene[1] in genename2_list:
+            intersection.append(gene[1])
+        else:
+            only1.append(gene[1])
+    for gene in genename2_list:
+        if gene in intersection:
+            continue
+        else:
+            only2.append(gene)
+    import pdb; pdb.set_trace()
 
 
 
