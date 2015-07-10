@@ -183,9 +183,8 @@ def write_to_xls(workbook, molecules):
                     log.debug("Skipping already-seen {0}".format(ft_accession))
                     continue
                 else:
-                    msg = "{0} re-defined with new nucleotide pattern in {1}".format(
-                        ft_accession, definition)
-                    log.warn(msg)
+                    log.warn("{0} re-defined with new nucleotide pattern in {1}".format(
+                        ft_accession, definition))
 
             for col, attr in enumerate(ft_cols):
                 parent = ft
