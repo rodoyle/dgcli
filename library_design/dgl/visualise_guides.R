@@ -91,27 +91,49 @@ draw_one_gene_graph_all_guides <- function(gene, cds_pos_all, cdss_list) {
 draw_gene_graphs(guides_bs, guides_all, cdss)
 
 cdss_list[,7] = 1
-draw_one_gene_graph_all_guides('Smarca4', cds_pos_all, cdss_list)
 
-# On-target vs off-target scatter plot
-# aggregate off-target score (coding off-target X10 + non-coding)
+on_off_scatterplot <- function(guide_list) {
+  # On-target vs off-target scatter plot
+  # aggregate off-target score (coding off-target X10 + non-coding)
+  cds_pos_all = guide_list
+  #cds_pos_all[,16] = (cds_pos_all$coding_offt*10 + cds_pos_all$genomic_offt)/2
+  #cds_pos_all[,17] = cds_pos_all$coding_offt*10 + cds_pos_all$genomic_offt
+  for (i in 1:nrow(cds_pos_all)) {
+    if (cds_pos_all[i,16] > 1) {
+      cds_pos_all[i,16] <- 1.5
+    } 
+  }
+  names(cds_pos_all)[16] <- 'aggregate_offt'
+  gene = 'Smarca4'
+  pdf(paste('gene_pdfs/', gene,'_gpp.pdf', sep=''), width=7, height=7)
+    par(mfrow=c(1,1))
+    par(mar=c(5,5,3,3))
+    plot(cds_pos_all$aggregate_offt, cds_pos_all$doench,
+         xlim = c(0,1), ylim = c(0,1),
+         xlab = 'Off-Target Aggregated Score', ylab = 'Doench On-Target Score',
+         pch = 18, col = 'azure4', cex = 2)
+  dev.off()
+}
+
+# all guides
+draw_one_gene_graph_all_guides('Smarca4', cds_pos_all, cdss_list)
+on_off_scatterplot(cds_pos_all)
+
+#ATPase domain only
+atpase = cds_pos_all[which(cds_pos_all[,15] >= 0.467955323 &
+                           cds_pos_all[,15] <= 0.743635),]
+draw_one_gene_graph_all_guides('Smarca4', atpase, cdss_list)
+on_off_scatterplot(atpase)
+
+# Doench > 0.5, offt < 1
 cds_pos_all[,16] = (cds_pos_all$coding_offt*10 + cds_pos_all$genomic_offt)/2
 cds_pos_all[,17] = cds_pos_all$coding_offt*10 + cds_pos_all$genomic_offt
-for (i in 1:nrow(cds_pos_all)) {
-  if (cds_pos_all[i,16] > 1) {
-    cds_pos_all[i,16] <- 1.5
-  } 
-}
-names(cds_pos_all)[16] <- 'aggregate_offt'
-gene = 'Smarca4'
+high_scoring = cds_pos_all[which(cds_pos_all[,8] >= 0.5 &
+                             cds_pos_all[,16] <= 0.5),]
+draw_one_gene_graph_all_guides('Smarca4', high_scoring, cdss_list)
+on_off_scatterplot(high_scoring)
 
-pdf(paste('gene_pdfs/', gene,'_gpp.pdf', sep=''), width=7, height=7)
-  par(mfrow=c(1,1))
-  par(mar=c(5,5,3,3))
-  plot(cds_pos_all$aggregate_offt, cds_pos_all$doench,
-       xlim = c(0,1), ylim = c(0,1),
-       xlab = 'Off-Target Aggregated Score', ylab = 'Doench On-Target Score',
-       pch = 18, col = 'azure4', cex = 2)
-dev.off()
 
 quantile(cds_pos_all[,17], probs=c(0, 0.5, 0.75, 0.9, 0.95, 0.99, 1))
+
+

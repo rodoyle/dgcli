@@ -467,12 +467,12 @@ def gecko_bowtie_search(guide_file, index_prefix, fasta_prefix, embl_gtf, biodat
     # guides = [i.strip().split(',') for i in contents]
     # with open('gecko_guides.fasta', 'w') as file:
     #     for guide in guides[1:]:
-    #         file.write('>{}|{}\n'.format(guide[0], guide[1]))
+    #         file.write('>{}__{}\n'.format(guide[0], guide[1]))
     #         file.write(guide[2] + '\n')
     # with open('gecko_guidelist.txt', 'w') as file:
     #     file.write('0\t0\t0\t0\t0\t1\tNNNN0NNNNNN\n')
     #     for guide in guides[1:]:
-    #        file.write('{}|{}\t0\t0\t0\t0\t1\tNNNN{}NNNNNN\n'.format(
+    #        file.write('{}__{}\t0\t0\t0\t0\t1\tNNNN{}NNNNNN\n'.format(
     #            guide[0],
     #            guide[1],
     #            guide[2],
@@ -486,9 +486,7 @@ def gecko_bowtie_search(guide_file, index_prefix, fasta_prefix, embl_gtf, biodat
     offt_scored = mit_offtarget_score(offt_list)
     offt_coding = is_coding_fast(biodata, embl_gtf, offt_scored, nt=20)
     from pprint import pprint; import pdb; pdb.set_trace()
-
-
-
+    # need to output self-scoring offtarget guides as csv
 
 if __name__ == '__main__':
     cli()
