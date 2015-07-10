@@ -50,13 +50,6 @@ def cli():
     pass
 
 
-def filter_extensions(filepath):
-    if filepath.endswith(('gb', 'gbk', 'genbank')):
-        return True
-    else:
-        False
-
-
 @cli.command()
 def set_default(key, value):
     CONFIG[key] = value
@@ -66,24 +59,6 @@ def set_default(key, value):
 def view_default(key):
     click.echo(CONFIG[key])
 
-
-def load_design_file(design_file_name):
-    """Parse and prepare the DnaDesign Object"""
-    design_filepath = os.path.join(BIODATA, 'dnadesigns', design_file_name)
-    with open(design_filepath) as dnadesign_file:
-        data = dgparse.genbank.parse(dnadesign_file)[0]
-        data['sha1'] = data['sequence']['sha1']
-        data['sequence'] = data['sequence']['seq']
-        data.pop('file_contents')
-        data['name'] = design_file_name
-    return data
-
-
-def annotate_design(dna_design):
-    """Annotate the DNA Design"""
-    pass
-
-
 def validate_solution(solution_json):
     """Validate a solution object"""
     is_circular = solution_json['is_circular']
@@ -92,19 +67,19 @@ def validate_solution(solution_json):
 
 
 @cli.command('fetch')
-@click.argument('object')
+@click.argument('record')
 @click.option('--filters', default=None)
 @click.option('--output', type=click.File(), default=sys.stdout)
-def fetch_cmd(object, filters, output):
+def fetch_cmd(record, filters, output):
     """Load all of DNA Molecule, Design, Feature, or Annotation from a
     remote source"""
     filters = filters if filters else {}
     if object in GB_MODELS:
         service = 'genomebrowser'
-        body = gb.make_fetch_instruction(object, filters)
+        body = gb.make_fetch_instruction(record, filters)
     else:
         service = 'inventory'
-        body = {'object': object, 'filters': filters}
+        body = {'object': record, 'filters': filters}
 
     endpoint_url = os.path.join(CONFIG['target_server'], 'api/{0}/crud'.format(service))
     credentials = (CONFIG['email'], CONFIG['password'])
@@ -119,11 +94,10 @@ def fetch_cmd(object, filters, output):
 
 
 @cli.command('push')
-@click.argument('type')
+@click.argument('model')
 @click.argument('items', type=click.Path())
-@click.option('--format', default='yaml')
 @click.option('--output', '-o', type=click.File(), default=sys.stdout)
-def push_cmd(type, items, format, output):
+def push_cmd(model, items, output):
     """Push a list of objects to a remote server"""
     target_url = os.path.join(CONFIG['target_server'], inv.INVENTORY_CRUD)
     # Trigger parsing
@@ -136,9 +110,8 @@ def push_cmd(type, items, format, output):
 
     items = yaml.load(items)
     for item in items:
-        instruction = inv.make_create_request(type, item)
+        instruction = inv.make_create_request(model, item)
         utils.make_post(target_url, CREDENTIALS, instruction, output, on_error)
-
 
 
 @cli.command('slice_genome')
@@ -195,32 +168,6 @@ def score_guides_cmd(guides, genome, async, activity, offtarget, output):
 
     utils.make_batch_rpc(endpoint_url, credentials, jobs, method, output,
                          on_error, async=False)
-
-
-@cli.command('run_design')
-@click.argument('spec_file', type=click.File(), default=sys.stdin)
-@click.option('--async', default=False, type=click.BOOL)
-@click.option('--output', '-o', type=click.File(), default=sys.stdout)
-def start_design(spec_file, async, output):
-    """Start DNA Design Job to generate guides, pairs, oligos, vectors, donors,
-    etc. Libraries are simply batches/chains of the above.
-
-    The specfile defines a canvas of more atomic methods which are composed
-    together and run either synchronously or asynchronously.
-
-    """
-    #TO DO fix this
-    resp = utils.make_json_rpc(RPC_URL, CREDENTIALS, 'design_library')
-
-    try:
-        guides = resp.json()['result']
-        click.echo(pprint.pprint(guides))
-        return guides
-    except KeyError:
-        log.warn("No RESULT in response")
-        pprint.pprint(resp.json())
-    except ValueError:
-        pprint.pprint(resp.text)
 
 
 @cli.command()
@@ -286,12 +233,12 @@ def extract_cmd(source, output, debug):
                     records.append(adapted_data)
                 else:
                     click.echo("{0} didn't contain features".format(os.path.basename(fname)))
+                if output == "stdio":
+                    click.echo(adapted_data)
             except ParserException:
                 click.echo("Error Parsing {0}".format(fname), err=True)
                 if debug:
                     raise
-        if output == "stdio":
-            click.echo(pprint.pprint(adapted_data))
     if output != "stdio":
         utils.write_to_xls(workbook, records)
 
