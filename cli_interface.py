@@ -10,7 +10,6 @@ import json
 import logging
 import os
 import pprint
-import re
 import sys
 import yaml
 
@@ -265,11 +264,12 @@ def upload(file_path, output):
 @cli.command('extract')
 @click.argument('source', type=click.STRING, nargs=-1)
 @click.option('--output', default='extracted_dnafeatures.xlsx')
-def extract_cmd(source, output):
+@click.option('--debug', type=click.BOOL, default=False)
+def extract_cmd(source, output, debug):
     """
     Extract all instances of a model from a set of files matching a pattern.
     :param object_type:
-    :return:
+    :returnj:
     """
     workbook = xlsxwriter.Workbook(output)
     records = []
@@ -278,15 +278,22 @@ def extract_cmd(source, output):
         click.echo(msg)
         with open(fname, 'r') as snapfile:
             try:
+                # parse the snapgene file and adapt to dtg's schema
                 adapted_data = snapgene.parse(snapfile)
-                adapted_data['accession'] = re.match(r'(EB\d+)', fname)
-                adapted_data['name'] = os.path.basename(fname)
-                records.append(adapted_data)
+                if adapted_data['dnafeatures']:
+                    # update the record with data from the filename
+                    adapted_data.update(inv.parse_file_name(fname))
+                    records.append(adapted_data)
+                else:
+                    click.echo("{0} didn't contain features".format(os.path.basename(fname)))
             except ParserException:
                 click.echo("Error Parsing {0}".format(fname), err=True)
-                raise
-    # Make the Excel file
-    utils.write_to_xls(workbook, records)
+                if debug:
+                    raise
+        if output == "stdio":
+            click.echo(pprint.pprint(adapted_data))
+    if output != "stdio":
+        utils.write_to_xls(workbook, records)
 
 if __name__ == '__main__':
     cli()

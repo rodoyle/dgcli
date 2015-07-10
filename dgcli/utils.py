@@ -8,6 +8,7 @@ from __future__ import absolute_import
 from __future__ import unicode_literals
 
 import json
+import logging
 import multiprocessing
 from collections import deque
 
@@ -18,6 +19,7 @@ import yaml
 
 from dgcli import async_job
 
+log = logging.getLogger(__name__)
 
 def make_post(endpoint_url, credentials, body_dict, output, on_error):
     """
@@ -141,7 +143,6 @@ def iter_repository(repo_root, extension_mapping):
                 yield parsed_data
 
 
-
 def write_to_xls(workbook, molecules):
     """"
     Given an array of JSON  objects, write them out to an upload ready XLSX
@@ -160,7 +161,7 @@ def write_to_xls(workbook, molecules):
     for col, heading in enumerate(ft_cols):
         feat_sheet.write_string(ft_row, col, heading)
         col += 1
-        feat_sheet.write_string(ft_row, col, "Extraced From")
+        feat_sheet.write_string(ft_row, col, "Extracted From")
 
     ft_row += 1
 
@@ -169,9 +170,23 @@ def write_to_xls(workbook, molecules):
         for ann in annotations:
             ft = ann.get('dnafeature')
             ft_accession = ft.get('accession')
+            definition = "{mol_accession}:{start}..{end}".format(
+                mol_accession=mol['accession'],
+                start=ann['start'],
+                end=ann['end']
+            )
             if ft_accession in seen_feat:
-                print "Skipping seen feature {0}".format(ft_accession)
-                continue
+                # now check the sequence
+                seen_bases = seen_feat[ft_accession]['pattern']['sha1']
+                new_bases = ft['pattern']['sha1']
+                if new_bases == seen_bases:
+                    log.debug("Skipping already-seen {0}".format(ft_accession))
+                    continue
+                else:
+                    msg = "{0} re-defined with new nucleotide pattern in {1}".format(
+                        ft_accession, definition)
+                    log.warn(msg)
+
             for col, attr in enumerate(ft_cols):
                 parent = ft
                 if '.' in attr:
@@ -192,10 +207,7 @@ def write_to_xls(workbook, molecules):
                     feat_sheet.write(ft_row, col, value)
 
             # Extraction Source
-            definition = "FROM: {mol_name}@{start}".format(
-                mol_name=mol['name'],
-                start=ann['start']
-            )
             feat_sheet.write_string(ft_row, (col + 1), definition)
             ft_row += 1
+            seen_feat[ft_accession] = ft  # stash the feature
 

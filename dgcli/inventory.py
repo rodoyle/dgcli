@@ -239,3 +239,16 @@ def upload_files(local_root, schema_path, file_conv_path):
 
                     yield (url, abspath)
 
+def parse_file_name(path):
+    """
+    Parse file names in accession, name, and format
+    :param path:
+    :return dictionary of matched items:
+    """
+    matched = re.search("([A-Z]{2,}\d+)[\s\_]([^/]+)\.(\w+)$", path)
+    if matched:
+        return {
+            'accession': matched.group(1),
+            'name': matched.group(2),
+            'format': matched.group(3),
+        }
