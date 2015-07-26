@@ -21,6 +21,7 @@ from dgcli import async_job
 
 log = logging.getLogger(__name__)
 
+
 def make_post(endpoint_url, credentials, body_dict, output, on_error):
     """
     Utility function to make post requests
