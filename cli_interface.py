@@ -68,20 +68,20 @@ def validate_solution(solution_json):
         assert solution_json['backbone']
 
 
-@cli.command('fetch')
-@click.argument('record')
+@cli.command('read')
+@click.argument('type')
 @click.option('--filters', default=None)
 @click.option('--output', type=click.File(), default=sys.stdout)
-def fetch_cmd(record, filters, output):
+def read_cmd(type_, filters, output):
     """Load all of DNA Molecule, Design, Feature, or Annotation from a
     remote source"""
     filters = filters if filters else {}
     if object in GB_MODELS:
         service = 'genomebrowser'
-        body = gb.make_fetch_instruction(record, filters)
+        body = gb.make_fetch_instruction(type_, filters)
     else:
         service = 'inventory'
-        body = {'object': record, 'filters': filters}
+        body = {'object': type_, 'filters': filters}
 
     endpoint_url = os.path.join(CONFIG['target_server'], 'api/{0}/crud'.format(service))
     credentials = (CONFIG['email'], CONFIG['password'])
@@ -95,24 +95,29 @@ def fetch_cmd(record, filters, output):
         pprint.pprint(resp.text)
 
 
-@cli.command('push')
-@click.argument('model')
-@click.argument('items', type=click.Path())
-@click.option('--output', '-o', type=click.File(), default=sys.stdout)
-def push_cmd(model, items, output):
-    """Push a list of objects to a remote server"""
+@cli.command('create')
+@click.argument('type', type=click.STRING)
+@click.argument('record_files', type=click.STRING, nargs=-1)
+@click.option('--format', type=click.Choice(['json', 'xlsx', 'csv', 'yaml']))
+def create_cmd(type_, record_files, format, output):
+    """Create a record on a remote server from local data or fail"""
     target_url = os.path.join(CONFIG['target_server'], inv.INVENTORY_CRUD)
-    # Trigger parsing
+    # Trigger parsing and generate list of json records
+    records = []
+
+    for record_path in record_files:
+        parser = make_parser(format)
+        with open(record_path, 'r') as record_file:
+            records.extend(parser(record_file))
 
     def on_error(response):
         try:
-            click.echo(response.json())
+            click.echo(response.json(), err=True)  # echo to stderr
         except ValueError:
-            click.echo(response.text)
+            click.echo(response.text, err=True)
 
-    items = yaml.load(items)
-    for item in items:
-        instruction = inv.make_create_request(model, item)
+    for record in records:
+        instruction = inv.make_create_request(type_, record)
         utils.make_post(target_url, CREDENTIALS, instruction, output, on_error)
 
 
@@ -192,23 +197,6 @@ def append_targets(spec_file_path, target_file, output, update):
     else:
         json.dump(specs, output, indent=2)
 
-
-@cli.command()
-@click.argument('file_path', type=click.Path())
-@click.option('--output', default=sys.stdout, type=click.File())
-def upload(file_path, output):
-    """Upload a file to the inventory or designs"""
-    schema_path = os.path.join(BIODATA, 'remote_schema.json')
-    convention_path = os.path.join(BIODATA, 'file_convention.yaml')
-
-    valid_files = inv.upload_files(file_path, schema_path, convention_path)
-
-    for url, payload in valid_files:
-        if 'crud' in url:
-            utils.make_post(url, CREDENTIALS, payload, output, click.echo)
-        else:
-            utils.make_file_upload_request(url, CREDENTIALS, file_path,
-                                           output, click.echo)
 
 @cli.command('extract')
 @click.argument('source', type=click.STRING, nargs=-1)
