@@ -1,6 +1,5 @@
 #! /usr/bin/env python
 
-
 from setuptools import setup, find_packages
 
 setup(name='dgcli',
@@ -8,7 +7,7 @@ setup(name='dgcli',
       url='https://api.deskgen.com',
       author='Desktop Genetics Ltd',
       maintainer='Desktop Genetics Ltd',
-      maintainer_email='devs@deskgen.com',
+      maintainer_email='devs@desktopgenetics.com',
       description="Command Line Interface for the DeskGen Platform",
       packages=find_packages(),
       entry_points={
@@ -21,10 +20,16 @@ setup(name='dgcli',
           'requests',
           'pyyaml',
           'xlrd',
+          'xlsxwriter',
       ],
       tests_require=[
           'tox',
           'pytest',
           'mock',
       ],
+      data_files=[
+          'config/file_convention.yaml',
+          'config/remote_schema.yaml',
+          'config/sample.dgrc'
+      ]
 )

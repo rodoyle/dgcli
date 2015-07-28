@@ -1,9 +1,10 @@
 # DeskGen Command Line Interface Run Control File
 # Format is YAML, because that's what we use for Salt and Manifests
+# Target Server - set the default target for all requests
 
-#target_server: 'https://api-staging.deskgen.com'
 #target_server: 'https://api.deskgen.com'
-target_server: 'http://localhost:8080'
+
+organisation: 'deskgen.com'
 email: 'rileyd@deskgen.com'
 password: 'test'  #switch to API tokens later
 biodata_root: '/home/rileyd/biodata'
@@ -11,4 +12,15 @@ genome:
   version: "GRCh38.p2"
   name: "Human"
 
+activity_params:
+  name: 'doench'
+  minscore: 0.0
 
+offtarget_params:
+  name: 'mitv1'
+  minscore: 0.0
+  maxmismatch: 3
+
+schema: "/home/rileyd/biodata/remote_schema.json"
+
+file_convention: "/home/rileyd/biodata/file_convention.yaml"

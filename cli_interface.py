@@ -1,22 +1,31 @@
-"""System level test of the guide services
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+"""
+Command line interface to the DeskGen Genome Editing Platform.
 """
 
 from __future__ import unicode_literals
 
-import csv
 import json
 import logging
 import os
 import pprint
 import sys
-import uuid
 import yaml
-import xlrd
 
 import click
 import requests
+import xlsxwriter
 
-import defaults
+from dgparse import snapgene
+from dgparse.exc import ParserException
+
+import dgcli.genomebrowser as gb
+from dgcli.genomebrowser import GB_MODELS
+from dgcli import genome_editing as ge
+from dgcli import utils, libraries, enevolv_writer
+from dgcli import inventory as inv
+
 
 logging.basicConfig()
 log = logging.getLogger(__name__)
@@ -28,26 +37,18 @@ with open(RC_PATH, 'r') as rc_file:
 
 # Check the ENV for any local overrides
 CONFIG.update(os.environ)
-BIODATA = CONFIG.get('BIODATA', '/opt/biodata')
+BIODATA = CONFIG.get('biodata_root', '/opt/biodata')
 
 # Derived Constants
 RPC_URL = os.path.join(CONFIG['target_server'], 'rpc')
-GENOMEBROWSER_TRACKS = os.path.join(CONFIG['target_server'], 'api/genomebrowser')
+GB_SLICE_URL = os.path.join(CONFIG['target_server'], 'api/genomebrowser')
 DESIGNS = os.path.join(CONFIG['biodata_root'], 'dnadesigns')
-GB_MODELS = ['gene', 'transcript', 'exon', 'cds', 'cdsregion', 'breakpoint',
-             'translocation', 'fragilesite']
+CREDENTIALS = (CONFIG['email'], CONFIG['password'])
 
 
 @click.group()
 def cli():
     pass
-
-
-def filter_extensions(filepath):
-    if filepath.endswith(('gb', 'gbk', 'genbank')):
-        return True
-    else:
-        False
 
 
 @cli.command()
@@ -60,23 +61,6 @@ def view_default(key):
     click.echo(CONFIG[key])
 
 
-def load_design_file(design_file_name):
-    """Parse and prepare the DnaDesign Object"""
-    design_filepath = os.path.join(BIODATA, 'dnadesigns', design_file_name)
-    with open(design_filepath) as dnadesign_file:
-        data = parsers.genbank.parse(dnadesign_file)[0]
-        data['sha1'] = data['sequence']['sha1']
-        data['sequence'] = data['sequence']['seq']
-        data.pop('file_contents')
-        data['name'] = design_file_name
-    return data
-
-
-def annotate_design(dna_design):
-    """Annotate the DNA Design"""
-    pass
-
-
 def validate_solution(solution_json):
     """Validate a solution object"""
     is_circular = solution_json['is_circular']
@@ -84,68 +68,24 @@ def validate_solution(solution_json):
         assert solution_json['backbone']
 
 
-@cli.command()
-@click.argument('design_path', type=click.Path())
-def autoclone(design_path, target_server):
-    """
-    AutoClone a DNA Design
-    """
-    url = RPC_URL
-    with open(design_path, 'r') as design_file:
-        # first try opening a valid json file from a previous command
-        dna_design = design_file.read()
-        # next try parsing the file
-
-    body = {
-        'jsonrpc': '2.0',
-        'method': 'find_cloning_solutions',
-        'id': 1,
-        'params': {
-            'async': False,
-            'dnadesign': dna_design,
-        }
-    }
-    resp = requests.post(url,
-                         json.dumps(body),
-                         auth=(CONFIG['email'], CONFIG['password']))  # required
-
-    if resp.ok:
-        msg = "{0} cloned".format(dna_design['name'])
-        log.info(msg)
-        click.echo(pprint.pprint(resp.json()['result']))
-    else:
-        msg = "Cloning Solution Generation failed for {0}".format(dna_design['name'])  # NOQA
-        log.warn(msg)
-        log.warn(pprint.pprint(resp.text))
-
-
-@cli.command()
-@click.argument('object')
+@cli.command('fetch')
+@click.argument('record')
 @click.option('--filters', default=None)
-@click.option('--expand', default=None)
 @click.option('--output', type=click.File(), default=sys.stdout)
-def read(object, filters, expand, output):
-    """Load all of an object"""
-    if object in ('genome', 'chromosome', 'gene', 'transcript',
-                  'exon', 'cds', 'cdsregion', 'trackedguide'):
+def fetch_cmd(record, filters, output):
+    """Load all of DNA Molecule, Design, Feature, or Annotation from a
+    remote source"""
+    filters = filters if filters else {}
+    if object in GB_MODELS:
         service = 'genomebrowser'
+        body = gb.make_fetch_instruction(record, filters)
     else:
         service = 'inventory'
+        body = {'object': record, 'filters': filters}
+
     endpoint_url = os.path.join(CONFIG['target_server'], 'api/{0}/crud'.format(service))
-    read = {}
-    if filters:
-        read['filter'] = json.loads(filters)
-    if expand:
-        read['expand'] = json.loads(expand)
-    body = {
-        'object': object,
-        'read': {
-            'filter': filters,
-            'expand': [[expand]]
-        }
-    }
-    credintials = (CONFIG['email'], CONFIG['password'])
-    resp = requests.post(endpoint_url, json.dumps(body), auth=credintials)
+    credentials = (CONFIG['email'], CONFIG['password'])
+    resp = requests.post(endpoint_url, json.dumps(body), auth=credentials)
     try:
         read_list = resp.json()['read']
         json.dump(read_list, output, indent=2)
@@ -154,383 +94,82 @@ def read(object, filters, expand, output):
     except ValueError:
         pprint.pprint(resp.text)
 
-@cli.command()
-@click.argument('gene_name')
-@click.argument('output', type=click.File('wb'))
-def load_gene(gene_name, output):
-    """Load a gene and all the target region data from the genome browser"""
-    gene_instruction = {
-        'object': 'gene',
-        'read': {
-            'filter': {'name': gene_name},
-            'expand': [['coding_sequences', 'regions', 'coordinates'],
-                       ['transcripts', 'exons', 'coordinates'],
-                       ['coordinates']
-                       ],
-        }
-    }
-    url = os.path.join(CONFIG['target_server'], 'api/genomebrowser/crud')
-    resp = requests.post(
-        url,
-        json.dumps(gene_instruction),
-        headers={b'content-type': b'application/json'}
-    )
-    try:
-        gene_data = resp.json()['read'][0]
-        yaml.dump(gene_data, output)
-    except KeyError:
-        msg = "Improper Query to GenomeBrowser"
-        log.error(msg)
-        log.error(resp.text)
-        raise
-    except IndexError:
-        msg = "No Genes Found for filter {0}".format(gene_name)
-        log.warn(msg)
-        log.error(resp.text)
-        raise
 
+@cli.command('push')
+@click.argument('model')
+@click.argument('items', type=click.Path())
+@click.option('--output', '-o', type=click.File(), default=sys.stdout)
+def push_cmd(model, items, output):
+    """Push a list of objects to a remote server"""
+    target_url = os.path.join(CONFIG['target_server'], inv.INVENTORY_CRUD)
+    # Trigger parsing
 
-@cli.command()
-@click.argument('chr_name')
-@click.argument('start_end', nargs=2, type=click.IntRange())
-@click.option('--nuclease', default='wtCas9')
-@click.option('--output', type=click.File('wb'), default=sys.stdout)
-def load_guides(chr_name, start_end, nuclease, output):
-    """
-    Test the load guide services. This is a synchronous method.
-    This really need to be improved to handle multiple genomes better.
-    :return:
-    """
-    target_url = RPC_URL
-    params = {
-        "chromosome": {
-            'name': chr_name,
-        },
-        "start_end": (start_end),
-        "nuclease": {'name': nuclease},
-        'async': False,
-    }
-
-    body = {
-        'jsonrpc': '2.0',
-        'method': 'load_guides',
-        'params': params,
-        'id': 1,
-    }
-
-    resp = requests.post(target_url,
-                         json.dumps(body),
-                         headers={b'content-type': b'application/json'})
-    try:
-        guides = resp.json()['result']
-        json.dump(guides, indent=2)
-    except KeyError:
-        log.warn("No RESULT in response")
-        pprint.pprint(resp.json())
-    except ValueError:
-        pprint.pprint(resp.text)
-
-
-@cli.command()
-@click.argument('guide')
-@click.argument('genome')
-@click.option('--async', default=False, type=click.BOOL)
-def score_guide(guide, genome, async):
-    """
-    Test the score_guide method
-    :return:
-    """
-    target_url = RPC_URL
-    body = {
-        'jsonrpc': '2.0',
-        'method': 'score_guide',
-        'params': {
-            "genome": {'version': genome},
-            "guide": {
-                'type_': 'GuideRna',
-                'bases': guide,
-                'pam': 'AGG',
-                'coordinates': {u'chromosome_id': 1,
-                   u'start_end': [32890642, 32890665],
-                   u'strand': 1},
-                'hits': None,
-                'score': None,
-                'mismatch': None,
-                'gc_content': None,
-
-            },
-            "scoring_function": {
-                'doench': {
-                    'minscore': 0.0  # Make higher to prevent slow scoring
-                },
-                'mitv1_db': {
-                    "maxmismatch": 3,
-                    'offset': 0,
-                }
-            },
-        "async": async,
-        },
-        'id': 1,
-    }
-    resp = requests.post(target_url,
-                         json.dumps(body),
-                         headers={b'content-type': b'application/json'},
-                         )
-    if async:
-        task_id = resp.json()['result']['task_id']
-        click.echo(task_id)
-    else:
+    def on_error(response):
         try:
-            guides = resp.json()['result']
-            click.echo(pprint.pprint(guides))
-            return guides
-        except KeyError:
-            log.warn("No RESULT in response")
-            pprint.pprint(resp.json())
+            click.echo(response.json())
         except ValueError:
-            pprint.pprint(resp.text)
+            click.echo(response.text)
 
-@cli.command()
-@click.argument('gene')
-@click.argument('genome')
-@click.option('--async', default=False, type=click.BOOL)
-def walk_gene(gene, genome, async):
-    """Test you can precompute guides for a gene"""
-    target_url = RPC_URL
-    initial_request = {
-        'jsonrpc': '2.0',
-        'method': 'walk_gene',
-        'params': {
-            "genome": {'version': genome},
-            'gene': {'name': gene},
-            "nuclease": {'name': 'wtCas9'},
-            'scoring_function': {
-                # 'mitv1_db': {
-                #     'maxmismatch': 3,
-                #     'minscore': 0.70,
-                #     'offset': 0
-                # },
-                'doench': {'minscore': 0.15},
-                #'filters': None,
-                'filters': [
-                    'filter_gc_content',
-                    'filter_consecutive_bases',
-                    'filter_pam_sites',
-                    'filter_restriction_site',
-                ],
-            },
-        "async": async,
-        },
-        'id': 1,
-    }
-    resp = requests.post(target_url,
-                         json.dumps(initial_request),
-                         headers={b'content-type': b'application/json'},
-                         )
-    try:
-        guides = resp.json()['result']
-        click.echo(pprint.pprint(guides))
-        return guides
-    except KeyError:
-        log.warn("No RESULT in response")
-        pprint.pprint(resp.json())
-    except ValueError:
-        pprint.pprint(resp.text)
+    items = yaml.load(items)
+    for item in items:
+        instruction = inv.make_create_request(model, item)
+        utils.make_post(target_url, CREDENTIALS, instruction, output, on_error)
 
 
-@cli.command()
-@click.argument('gene')
-@click.argument('genome', default='GRCh37.p13')
-@click.argument('nuclease', default='Cas9D10A')
-@click.option('--async', default=False, type=click.BOOL)
-@click.option('--output', default=sys.stdout, type=click.File())
-def run_pair_tornado(gene, genome, nuclease, async, output):
-    nuclease_dict = {'name': nuclease}
-    target_url = RPC_URL
-    initial_request = {
-        'jsonrpc': '2.0',
-        'method': 'pair_tornado',
-        'params': {
-            'gene': {'name': gene},
-            "genome": {'version': genome},
-            "nuclease": nuclease_dict,
-            'scoring_function': {
-                # 'mitv1_db': {
-                #     'maxmismatch': 3,
-                #     'minscore': 0.50,
-                #     'offset': 0
-                # },
-                # 'filters': [
-                #     'filter_gc_content',
-                #     'filter_consecutive_bases',
-                #     'filter_pam_sites',
-                #     'filter_restriction_site',
-                # ],
-                'doench': {'minscore': 0.15},
-                'filters': None,
-            'focal_point': 'n-terminal',
-            },
-        "async": async,
-        },
-        'id': 1,
-    }
-    resp = requests.post(target_url,
-                         json.dumps(initial_request),
-                         headers={b'content-type': b'application/json'},
-                         )
-    try:
-        if async:
-            task_id = resp.json()['result']['task_id']
-            return task_id
-        else:
-            yaml.dump(resp.json()['result'], output)
-    except KeyError:
-        click.echo(resp.text)
-        raise
-    except ValueError:
-        click.echo(resp.text)
-        raise
-
-@cli.command()
-@click.argument('spec_file', default=sys.stdin, type=click.File())
-@click.option('--async', default=False, type=click.BOOL)
-@click.option('--dryrun', default=False, type=click.BOOL)
-@click.option('--output', default=sys.stdout, type=click.File())
-@click.option('--dump', default=False, type=click.BOOL)
-def design_library(spec_file, async, dryrun, output, dump):
+@cli.command('slice_genome')
+@click.argument('chromosome')
+@click.argument('start_end', nargs=2, type=click.IntRange())
+@click.argument('tracks', type=click.Choice(GB_MODELS))
+@click.option('--genome', default=CONFIG['genome'])
+@click.option('--strand', default=0)
+@click.option('--output', type=click.File('wb'), default=sys.stdout)
+@click.option('--sequence', default=False)
+@click.option('--nuclease', default='wtCas9')
+def slice_genome_cmd(genome, chromosome, start_end, tracks, strand, output,
+                     sequence, nuclease):
+    """"
+    Load all the track data in the genome browser in an slice interval from
+    a remote source.
     """
-    Make a request to the server to start a library design job
-    :param spec_file:
-    :param async:
-    :param dryrun:
-    :param output:
+    target_url = GB_SLICE_URL
+    # FUTURE - genomebrowser should just support dynamic tracks for guides,
+    # talens, and other features. For now we use this work around.
+    # FUTURE - allow other intersections besides overlaps
+    guides = False
+    if 'guides' in tracks:
+        guides = True
+        del tracks[tracks.index('guides')]
+
+    instruction = gb.make_slice_instruction(genome, chromosome, start_end, strand, sequence)  # NOQA
+    utils.make_post(target_url, instruction, output)
+    # this is a work around as RPC does the guides while GB does the rest
+    if guides:
+        nuc_slice = ge.make_slice_instruction(chromosome, start_end, nuclease)
+        utils.make_json_rpc(0, 'load_guides', nuc_slice, output)
+
+
+@cli.command('score_guides')
+@click.argument('guides', type=click.File(), default=sys.stdin)
+@click.option('--genome', default=CONFIG['genome'])
+@click.option('--output', '-o', type=click.File(), default=sys.stdout)
+@click.option('--async', default=False, type=click.BOOL)
+@click.option('--activity', default=CONFIG['activity_params'])
+@click.option('--offtarget', default=CONFIG['offtarget_params'])
+def score_guides_cmd(guides, genome, async, activity, offtarget, output):
+    """
+    Analyze a batch of guide RNAs
     :return:
     """
-    target_url = RPC_URL
-    specs = json.load(spec_file)
-    request = {
-        "jsonrpc": '2.0',
-        "method": 'design_library',
-        "id": 1,
-        "params": {
-            "genome": specs.get('genome', defaults.DEFAULT_GENOME),
-            "nuclease": specs.get('nuclease', defaults.DEFAULT_NUCLEASE),
-            "defaults": specs.get('defaults', defaults.DEFAULT_GENE_WALKER),
-            "targets": specs.get('targets'),
-            #"callbacks": specs.get('callbacks', None),
-            "name": specs.get('name', "Custom_Library"),
-            "description": specs.get('description'),
-            "dry_run": dryrun,
-            "async": async,
-        },
-    }
-    if dump:  # dump the request body
-        json.dump(request, sys.stdout, indent=2)
-        return
-    resp = requests.post(target_url,
-                         json.dumps(request),
-                         headers={b'content-type': b'application/json'},
-                         )
-    try:
-        if async:
-            task_id = resp.json()['result']['task_id']
-            return task_id
-        else:
-            json.dump(resp.json()['result'], output, indent=2)
-    except KeyError:
-        click.echo(resp.text)
-        raise
-    except ValueError:
-        click.echo(resp.text)
-        raise
+    endpoint_url = RPC_URL
+    credentials = CREDENTIALS
+    method = 'score_guide'
+    jobs = ge.make_score_guide_instruction(guides, genome, activity, offtarget)
 
-@cli.command()
-@click.argument('task_id')
-def check_status(task_id):
-    """
-    Check the status of an asynchronous Job
-    :param task_id:
-    :return:
-    """
-    target_url = RPC_URL
-    body = {
-        'jsonrpc': '2.0',
-        'method': 'check_status',
-        'id': task_id,
-    }
-    resp = requests.post(target_url,
-                         json.dumps(body),
-                         headers={b'content-type': b'application/json'},
-                         )
-    click.echo(resp.text)
+    def on_error(response):
+        click.echo(response.text)
 
-
-def run_polling(target_server, scoring_queue, email, password):
-
-    # Check our tasks
-    endpoint_url = 'rpc'
-    target_url = os.path.join(target_server, endpoint_url)
-    failed_tasks = list()
-    passed_tasks = list()
-
-    while True:
-        if len(scoring_queue) < 0:
-            break
-        task_id = scoring_queue.popleft()
-        body = {
-        'jsonrpc': '2.0',
-        'method': 'check_status',
-        'id': task_id,
-        }
-        resp = requests.post(target_url,
-                         json.dumps(body),
-                         headers={b'content-type': b'application/json'},
-                         auth=(email, password))
-        if resp.json()['result'] == 'PENDING':
-            scoring_queue.append(task_id)
-        log.info(resp.json()['result'])
-
-
-@cli.command()
-@click.argument('genome')
-def load_genome(genome):
-    url = os.path.join(CONFIG['target_server'], 'api/genomebrowser/crud')
-    body = {
-        'object': 'genome',
-        'read': {
-            'filter': {'version': genome},
-            'expand': [['chromosomes']]
-        }
-    }
-    resp = requests.post(
-        url,
-        json.dumps(body),
-        headers={b'content-type': b'application/json'}
-    )
-    click.echo(resp.text)
-
-
-def parse_excel_file(filehandle):
-    """
-    Parse an excel file and return a list of targets
-    :param filehandle:
-    :return:
-    """
-    targets = []
-
-    target_file = xlrd.open_workbook(filehandle)
-    click.echo("Opended XLS workbook of targets")
-    sheet = target_file.sheet_by_index(0)  # get the first sheet
-    for row_idx in range(1, sheet.nrows):
-        row = sheet.row_values(row_idx)
-        targets.append({
-            "gene": {
-                "name": row[0],  # the name
-                "accession": row[1]  # the accession
-            }
-        })
-    return targets
-
+    utils.make_batch_rpc(endpoint_url, credentials, jobs, method, output,
+                         on_error, async=False)
 
 
 @cli.command()
@@ -546,7 +185,7 @@ def append_targets(spec_file_path, target_file, output, update):
         click.echo(spec_file)
         specs = json.load(spec_file)
     if target_file.name.endswith('xlsx'):  # if excel file
-        specs['targets'] = parse_excel_file(target_file.name)
+        specs['targets'] = libraries.parse_excel_file(target_file.name)
     if update:
         with open(spec_file_path, b'w') as spec_file:
             json.dump(specs, spec_file, indent=2)
@@ -555,46 +194,55 @@ def append_targets(spec_file_path, target_file, output, update):
 
 
 @cli.command()
-@click.argument('genome', envvar='GENOME')
-@click.argument('chromosome')
-@click.argument('start_end', nargs=2, type=click.IntRange())
-@click.argument('tracks', type=click.Choice(GB_MODELS))
-@click.option('--strand', default=0)
-@click.option('--output', type=click.File('wb'), default=sys.stdout)
-@click.option('--sequence', default=False)
-def query_genome(genome, chromosome, start_end, tracks, strand, output, sequence):
-    """"
-    Load all the track data in the genome browser in an interval
-    """
-    target_url = GENOMEBROWSER_TRACKS
-    instruction = {
-        "chromosome": {
-            "name": chromosome,
-        },
-        "genome": {
-            "version": genome,
-        },
-        "target_region": {
-            "start": start_end[0],
-            "end": start_end[1],
-            "strand": strand if strand else 0,  # optional, default 0
-        },
-        "region_type": tracks,
-        "sequence": sequence
-    }
+@click.argument('file_path', type=click.Path())
+@click.option('--output', default=sys.stdout, type=click.File())
+def upload(file_path, output):
+    """Upload a file to the inventory or designs"""
+    schema_path = os.path.join(BIODATA, 'remote_schema.json')
+    convention_path = os.path.join(BIODATA, 'file_convention.yaml')
 
-    resp = requests.post(target_url, json.dumps(instruction))
-    try:
-        json.dump(resp.json(), output, indent=2)
-    except ValueError:
-        pprint.pprint(resp.text)
+    valid_files = inv.upload_files(file_path, schema_path, convention_path)
+
+    for url, payload in valid_files:
+        if 'crud' in url:
+            utils.make_post(url, CREDENTIALS, payload, output, click.echo)
+        else:
+            utils.make_file_upload_request(url, CREDENTIALS, file_path,
+                                           output, click.echo)
+
+@cli.command('extract')
+@click.argument('source', type=click.STRING, nargs=-1)
+@click.option('--output', default='extracted_dnafeatures.xlsx')
+@click.option('--debug', type=click.BOOL, default=False)
+def extract_cmd(source, output, debug):
+    """
+    Extract all instances of a model from a set of files matching a pattern.
+    :param object_type:
+    :returnj:
+    """
+    workbook = xlsxwriter.Workbook(output)
+    records = []
+    for fname in source:
+        msg = "Parsing file {0}".format(fname)
+        click.echo(msg)
+        with open(fname, 'r') as snapfile:
+            try:
+                # parse the snapgene file and adapt to dtg's schema
+                adapted_data = snapgene.parse(snapfile)
+                if adapted_data['dnafeatures']:
+                    # update the record with data from the filename
+                    adapted_data.update(inv.parse_file_name(fname))
+                    records.append(adapted_data)
+                else:
+                    click.echo("{0} didn't contain features".format(os.path.basename(fname)))
+                if output == "stdio":
+                    click.echo(adapted_data)
+            except ParserException:
+                click.echo("Error Parsing {0}".format(fname), err=True)
+                if debug:
+                    raise
+    if output != "stdio":
+        enevolv_writer.write_to_xls(workbook, records)
 
 if __name__ == '__main__':
     cli()
-
-
-
-
-
-
-
