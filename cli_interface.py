@@ -23,6 +23,7 @@ from dgcli.genomebrowser import GB_MODELS
 from dgcli import genome_editing as ge
 from dgcli import utils, libraries, enevolv_writer
 from dgcli import inventory as inv
+from dgcli.configuration import load
 
 
 logging.basicConfig()
@@ -33,15 +34,29 @@ RC_PATH = os.path.expanduser('~/.dgrc')  # Get normalized location of RC files
 
 
 @click.group()
-def cli():
-    pass
+@click.pass_context
+def cli(ctx):
+    config = load(RC_PATH)
+    ctx.obj = config
+
+
+@cli.command('login')
+@click.pass_context
+@click.option('--email')
+@click.option('--password')
+def login_cmd(ctx, email, password):
+    try:
+        ctx.obj.target_server.inventory.login(email, password)
+    except inv.AuthenticationError:
+        click.echo("Error Authenticating", err=True)
 
 
 @cli.command('read')
 @click.argument('type')
 @click.option('--filters', default=None)
 @click.option('--output', type=click.File(), default=sys.stdout)
-def read_cmd(type_, filters, output):
+@click.pass_context
+def read_cmd(ctx, type_, filters, output):
     """Load all of DNA Molecule, Design, Feature, or Annotation from a
     remote source"""
     filters = filters if filters else {}
@@ -52,8 +67,8 @@ def read_cmd(type_, filters, output):
         service = 'inventory'
         body = {'object': type_, 'filters': filters}
 
-    endpoint_url = os.path.join(CONFIG['target_server'], 'api/{0}/crud'.format(service))
-    credentials = (CONFIG['email'], CONFIG['password'])
+    endpoint_url = os.path.join(ctx.target_server.url, 'api/{0}/crud'.format(service))
+    credentials = ctx.user.credentials
     resp = requests.post(endpoint_url, json.dumps(body), auth=credentials)
     try:
         read_list = resp.json()['read']
@@ -68,38 +83,34 @@ def read_cmd(type_, filters, output):
 @click.argument('record_files', type=click.STRING, nargs=-1)
 @click.option('--record_type')
 @click.option('--format', type=click.Choice(['json', 'xlsx', 'csv', 'yaml']))
-def create_cmd(record_files, record_type, format, output):
+@click.pass_context
+def create_cmd(ctx, record_files, record_type, format):
     """Create a record on a remote server from local data or fail"""
-    target_url = os.path.join(CONFIG['target_server'], inv.INVENTORY_CRUD)
     # Trigger parsing and generate list of json records
     records = utils.iterate_records_from_files(record_files)
     for record in records:
-        data, errors = dgparse.validate(record)
-        if errors is {}:
-            INVENTORY_SERVICE.create_record(data)
-        else:
+        data, errors = ctx.obj.target_server.inventory.create(record)
+        if errors:
             for k, error_message in errors.iteritems():
                 click.echo(error_message, err=True)
-            utils.write_errors(data, errors)
-
 
 
 @cli.command('slice_genome')
 @click.argument('chromosome')
 @click.argument('start_end', nargs=2, type=click.IntRange())
 @click.argument('tracks', type=click.Choice(GB_MODELS))
-@click.option('--genome', default=CONFIG['genome'])
+@click.option('--genome')
 @click.option('--strand', default=0)
 @click.option('--output', type=click.File('wb'), default=sys.stdout)
 @click.option('--sequence', default=False)
 @click.option('--nuclease', default='wtCas9')
-def slice_genome_cmd(genome, chromosome, start_end, tracks, strand, output,
+@click.pass_context
+def slice_genome_cmd(ctx, genome, chromosome, start_end, tracks, strand, output,
                      sequence, nuclease):
     """"
     Load all the track data in the genome browser in an slice interval from
     a remote source.
     """
-    target_url = GB_SLICE_URL
     # FUTURE - genomebrowser should just support dynamic tracks for guides,
     # talens, and other features. For now we use this work around.
     # FUTURE - allow other intersections besides overlaps
@@ -107,9 +118,7 @@ def slice_genome_cmd(genome, chromosome, start_end, tracks, strand, output,
     if 'guides' in tracks:
         guides = True
         del tracks[tracks.index('guides')]
-
-    instruction = gb.make_slice_instruction(genome, chromosome, start_end, strand, sequence)  # NOQA
-    utils.make_post(target_url, instruction, output)
+    ctx.target_server.genomebrowser.slice(genome, chromosome, start_end, strand, sequence)  # NOQA
     # this is a work around as RPC does the guides while GB does the rest
     if guides:
         nuc_slice = ge.make_slice_instruction(chromosome, start_end, nuclease)
@@ -118,26 +127,18 @@ def slice_genome_cmd(genome, chromosome, start_end, tracks, strand, output,
 
 @cli.command('score_guides')
 @click.argument('guides', type=click.File(), default=sys.stdin)
-@click.option('--genome', default=CONFIG['genome'])
+@click.option('--genome')
 @click.option('--output', '-o', type=click.File(), default=sys.stdout)
 @click.option('--async', default=False, type=click.BOOL)
-@click.option('--activity', default=CONFIG['activity_params'])
-@click.option('--offtarget', default=CONFIG['offtarget_params'])
-def score_guides_cmd(guides, genome, async, activity, offtarget, output):
+@click.option('--activity')
+@click.option('--offtarget')
+@click.pass_context
+def score_guides_cmd(ctx, guides, genome, async, activity, offtarget, output):
     """
     Analyze a batch of guide RNAs
     :return:
     """
-    endpoint_url = RPC_URL
-    credentials = CREDENTIALS
-    method = 'score_guide'
-    jobs = ge.make_score_guide_instruction(guides, genome, activity, offtarget)
-
-    def on_error(response):
-        click.echo(response.text)
-
-    utils.make_batch_rpc(endpoint_url, credentials, jobs, method, output,
-                         on_error, async=False)
+    ctx.target_server.workers.score_guide(guides, genome, activity, offtarget)
 
 
 @cli.command()
@@ -196,5 +197,4 @@ def extract_cmd(source, output, debug):
         enevolv_writer.write_to_xls(workbook, records)
 
 if __name__ == '__main__':
-    startup()
-    cli()
+    cli(obj={})
