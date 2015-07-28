@@ -11,7 +11,7 @@ Command Line Client for DeskGen Platform
 cd dgcli
 git fetch
 git reset --hard origin/{{ target_branch }}
-sudo python setup.py
+sudo python setup.py install
 ```
 
 ### Method 2: download
@@ -24,6 +24,6 @@ sudo python setup.py
 
 4. Download and unpack new release
 
-5. Install with ```sudo python setup.py```
+5. Install with ```sudo python setup.py install```
 
 ## Quick Start
