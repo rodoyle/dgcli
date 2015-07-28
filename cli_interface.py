@@ -11,14 +11,12 @@ import logging
 import os
 import pprint
 import sys
-import yaml
 
 import click
 import requests
 import xlsxwriter
 
-from dgparse import snapgene
-from dgparse.exc import ParserException
+import dgparse
 
 import dgcli.genomebrowser as gb
 from dgcli.genomebrowser import GB_MODELS
@@ -32,40 +30,11 @@ log = logging.getLogger(__name__)
 log.setLevel(logging.DEBUG)
 
 RC_PATH = os.path.expanduser('~/.dgrc')  # Get normalized location of RC files
-with open(RC_PATH, 'r') as rc_file:
-    CONFIG = yaml.load(rc_file) # Load Run Ctrl config into RAM
-
-# Check the ENV for any local overrides
-CONFIG.update(os.environ)
-BIODATA = CONFIG.get('biodata_root', '/opt/biodata')
-
-# Derived Constants
-RPC_URL = os.path.join(CONFIG['target_server'], 'rpc')
-GB_SLICE_URL = os.path.join(CONFIG['target_server'], 'api/genomebrowser')
-DESIGNS = os.path.join(CONFIG['biodata_root'], 'dnadesigns')
-CREDENTIALS = (CONFIG['email'], CONFIG['password'])
 
 
 @click.group()
 def cli():
     pass
-
-
-@cli.command()
-def set_default(key, value):
-    CONFIG[key] = value
-
-
-@cli.command()
-def view_default(key):
-    click.echo(CONFIG[key])
-
-
-def validate_solution(solution_json):
-    """Validate a solution object"""
-    is_circular = solution_json['is_circular']
-    if is_circular:
-        assert solution_json['backbone']
 
 
 @cli.command('read')
@@ -96,29 +65,23 @@ def read_cmd(type_, filters, output):
 
 
 @cli.command('create')
-@click.argument('type', type=click.STRING)
 @click.argument('record_files', type=click.STRING, nargs=-1)
+@click.option('--record_type')
 @click.option('--format', type=click.Choice(['json', 'xlsx', 'csv', 'yaml']))
-def create_cmd(type_, record_files, format, output):
+def create_cmd(record_files, record_type, format, output):
     """Create a record on a remote server from local data or fail"""
     target_url = os.path.join(CONFIG['target_server'], inv.INVENTORY_CRUD)
     # Trigger parsing and generate list of json records
-    records = []
-
-    for record_path in record_files:
-        parser = make_parser(format)
-        with open(record_path, 'r') as record_file:
-            records.extend(parser(record_file))
-
-    def on_error(response):
-        try:
-            click.echo(response.json(), err=True)  # echo to stderr
-        except ValueError:
-            click.echo(response.text, err=True)
-
+    records = utils.iterate_records_from_files(record_files)
     for record in records:
-        instruction = inv.make_create_request(type_, record)
-        utils.make_post(target_url, CREDENTIALS, instruction, output, on_error)
+        data, errors = dgparse.validate(record)
+        if errors is {}:
+            INVENTORY_SERVICE.create_record(data)
+        else:
+            for k, error_message in errors.iteritems():
+                click.echo(error_message, err=True)
+            utils.write_errors(data, errors)
+
 
 
 @cli.command('slice_genome')
@@ -216,7 +179,7 @@ def extract_cmd(source, output, debug):
         with open(fname, 'r') as snapfile:
             try:
                 # parse the snapgene file and adapt to dtg's schema
-                adapted_data = snapgene.parse(snapfile)
+                adapted_data = dgparse.snapgene.parse(snapfile)
                 if adapted_data['dnafeatures']:
                     # update the record with data from the filename
                     adapted_data.update(inv.parse_file_name(fname))
@@ -225,7 +188,7 @@ def extract_cmd(source, output, debug):
                     click.echo("{0} didn't contain features".format(os.path.basename(fname)))
                 if output == "stdio":
                     click.echo(adapted_data)
-            except ParserException:
+            except dgparse.exc.ParserException:
                 click.echo("Error Parsing {0}".format(fname), err=True)
                 if debug:
                     raise
@@ -233,4 +196,5 @@ def extract_cmd(source, output, debug):
         enevolv_writer.write_to_xls(workbook, records)
 
 if __name__ == '__main__':
+    startup()
     cli()

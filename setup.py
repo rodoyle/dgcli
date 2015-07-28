@@ -28,8 +28,6 @@ setup(name='dgcli',
           'mock',
       ],
       data_files=[
-          'config/file_convention.yaml',
-          'config/remote_schema.json',
           'config/sample.dgrc'
       ]
 )
