@@ -8,6 +8,8 @@ import os
 from marshmallow import Schema, fields
 import yaml
 
+from dgcli import inventory
+
 
 class ServerConfig(object):
     """
@@ -15,13 +17,13 @@ class ServerConfig(object):
     """
     def __init__(self, url):
         self.url = url
+        self.inventory = inventory.InventoryService(self.url)
 
 
 class UserConfig(object):
     def __init__(self, email, password, biodata_root):
         self.email = email
         self.password = password
-        self.credentials = (self.email, self.password)
         self.biodata_root = biodata_root
 
 
@@ -31,6 +33,7 @@ class Config(object):
         self.config_file_path = config_file_path
         self.target_server = target_server
         self.user = user
+        self.target_server.inventory.set_credentials(self.user.email, self.user.password)
 
 
 class ServerSchema(Schema):
