@@ -3,7 +3,7 @@
 # Target Server - set the default target for all requests
 
 target_server:
-  url: 'https://api.deskgen.com'
+  url: 'https://www.deskgen.com'
 
 user:
   email: 'rileyd@deskgen.com'
