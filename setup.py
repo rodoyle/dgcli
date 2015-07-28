@@ -19,8 +19,9 @@ setup(name='dgcli',
           'click',
           'requests',
           'pyyaml',
+          'openpyxl',
           'xlsxwriter',
-          'openpyxl'
+          'responses'
       ],
       tests_require=[
           'tox',
