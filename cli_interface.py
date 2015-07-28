@@ -17,14 +17,15 @@ import click
 import requests
 import xlsxwriter
 
-import dgparse.snapgene as snapgene
+from dgparse import snapgene
 from dgparse.exc import ParserException
 
 import dgcli.genomebrowser as gb
 from dgcli.genomebrowser import GB_MODELS
 from dgcli import genome_editing as ge
-from dgcli import utils, libraries
+from dgcli import utils, libraries, enevolv_writer
 from dgcli import inventory as inv
+
 
 logging.basicConfig()
 log = logging.getLogger(__name__)
@@ -58,6 +59,7 @@ def set_default(key, value):
 @cli.command()
 def view_default(key):
     click.echo(CONFIG[key])
+
 
 def validate_solution(solution_json):
     """Validate a solution object"""
@@ -240,7 +242,7 @@ def extract_cmd(source, output, debug):
                 if debug:
                     raise
     if output != "stdio":
-        utils.write_to_xls(workbook, records)
+        enevolv_writer.write_to_xls(workbook, records)
 
 if __name__ == '__main__':
     cli()
