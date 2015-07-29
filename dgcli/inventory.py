@@ -63,6 +63,7 @@ class InventoryService(object):
         """Creates a record"""
         schema = self._get_schema(record)
         data, errors = schema.dump(record)
+        errors.update(schema.validate(record))
         if errors:
             return record, errors
         instruction = {
@@ -71,11 +72,11 @@ class InventoryService(object):
         }
         # validate instruction
         body, errors = self.crudreq_schema.dump(instruction)
-        import ipdb;ipdb.set_trace()
         resp = self.session.post(self.crud_url, json=body)
         if resp.ok:
-            return resp.json()['read'], {}
+            return resp.json()['create'], {}
         else:
+            import ipdb;ipdb.set_trace()
             try:
                 return record, resp.json()
             except ValueError:
@@ -85,7 +86,6 @@ class InventoryService(object):
 def construct_service(config):
     inv_serve = InventoryService(config.target_server)
     return inv_serve
-
 
 
 def parse_file_name(path):
