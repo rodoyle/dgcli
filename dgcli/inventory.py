@@ -11,33 +11,19 @@ import logging
 import os
 import re
 
+from marshmallow import Schema, fields
+
 import requests
 import dgparse
+
+
 
 log = logging.getLogger(__name__)
 
 
-UNIQUE_CONSTRAINTS = {
-    'dnamoleculesequence': ['sha1'],
-    'dnafeaturepattern': ['sha1'],
-    'dnafeaturecategory': ['name'],
-    'organisation': ['domain'],
-    'user': ['email'],
-    'dnamolecule': ['organisation_id', 'accession'],
-    'dnadesign': ['user_id', 'sha1'],
-    'dnamolecule_dnafeature': ['dnamolecule_id', 'dnafeature_id', 'start', 'end', 'strand'],
-    'dnadesign_dnafeature': ['dnadesign_id', 'dnafeature_id', 'start', 'end', 'strand'],
-}
-
-RELATIONS = {
-    'user': ['organisation'],
-    'dnamolecule': ['user', 'organisation', 'sequence'],
-    'dnamoleculefile': ['dnamolecule'],
-    'dnadesign': ['user', 'organisation'],
-    'dnafeature': ['user', 'organisation', 'pattern', 'category'],
-    'dnamolecule_dnafeature': ['dnamolecule', 'dnafeature'],
-    'dnadesign_dnafeature': ['dnadesign', 'dnafeature'],
-}
+class CreateInstructionSchema(Schema):
+    object = fields.String(required=True, attribute="object")
+    create = fields.List(fields.Raw, required=True)
 
 
 class AuthenticationError(Exception):
@@ -48,6 +34,7 @@ class InventoryService(object):
     """
     Represents the Inventory Service and its public methods.
     """
+    crudreq_schema = CreateInstructionSchema()
 
     def __init__(self, target_server):
         self.target_server = target_server
@@ -75,9 +62,16 @@ class InventoryService(object):
     def create(self, record):
         """Creates a record"""
         schema = self._get_schema(record)
-        body, errors = schema.dumps(record)
+        data, errors = schema.dump(record)
         if errors:
             return record, errors
+        instruction = {
+            'object': data.pop('type_'),
+            'create': data if isinstance(data, list) else [data],
+        }
+        # validate instruction
+        body, errors = self.crudreq_schema.dump(instruction)
+        import ipdb;ipdb.set_trace()
         resp = self.session.post(self.crud_url, json=body)
         if resp.ok:
             return resp.json()['read'], {}
