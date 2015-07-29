@@ -3,8 +3,8 @@
 from setuptools import setup, find_packages
 
 setup(name='dgcli',
-      version='0.0.1',
-      url='https://api.deskgen.com',
+      version='0.0.2',
+      url='https://www.deskgen.com',
       author='Desktop Genetics Ltd',
       maintainer='Desktop Genetics Ltd',
       maintainer_email='devs@desktopgenetics.com',
@@ -29,7 +29,7 @@ setup(name='dgcli',
       ],
       data_files=[
           'config/file_convention.yaml',
-          'config/remote_schema.yaml',
+          'config/remote_schema.json',
           'config/sample.dgrc'
       ]
 )

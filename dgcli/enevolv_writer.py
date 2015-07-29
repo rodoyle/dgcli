@@ -1,4 +1,8 @@
-__author__ = 'rileyd'
+from __future__ import unicode_literals
+import json
+import logging
+
+log = logging.getLogger(__file__)
 
 
 def write_to_xls(workbook, molecules):
