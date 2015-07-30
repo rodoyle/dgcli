@@ -1,5 +1,1 @@
--e git+http://github.com/deskgen/dgparse#egg=dgparse
-requests
-xlsxwriter
-openpyxl
-responses
+pytest
