@@ -16,11 +16,13 @@ setup(name='dgcli',
           ]
       },
       install_requires=[
+          'dgparse',
           'click',
           'requests',
           'pyyaml',
           'openpyxl',
           'xlsxwriter',
+          'marshmallow',
           'responses'
       ],
       tests_require=[
