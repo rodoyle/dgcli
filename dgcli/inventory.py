@@ -30,7 +30,7 @@ class AuthenticationError(Exception):
     pass
 
 
-class InventoryService(object):
+class InventoryClient(object):
     """
     Represents the Inventory Service and its public methods.
     """
@@ -76,7 +76,6 @@ class InventoryService(object):
         if resp.ok:
             return resp.json()['create'], {}
         else:
-            import ipdb;ipdb.set_trace()
             try:
                 return record, resp.json()
             except ValueError:
@@ -84,7 +83,7 @@ class InventoryService(object):
 
 
 def construct_service(config):
-    inv_serve = InventoryService(config.target_server)
+    inv_serve = InventoryClient(config.target_server)
     return inv_serve
 
 

@@ -17,7 +17,7 @@ class ServerConfig(object):
     """
     def __init__(self, url):
         self.url = url
-        self.inventory = inventory.InventoryService(self.url)
+        self.inventory = inventory.InventoryClient(self.url)
 
 
 class UserConfig(object):
