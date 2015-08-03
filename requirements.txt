@@ -1,1 +1,2 @@
 pytest
+-e git+http://github.com/DeskGen/dgparse.git@riley/xlsx-parser#egg=dgcli
