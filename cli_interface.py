@@ -82,14 +82,13 @@ def read_cmd(ctx, type_, filters, output):
 @cli.command('create')
 @click.argument('record_files', type=click.STRING, nargs=-1)
 @click.option('--record_type')
-@click.option('--format', type=click.Choice(['json', 'xlsx', 'csv', 'yaml']))
 @click.pass_context
-def create_cmd(ctx, record_files, record_type, format):
+def create_cmd(ctx, record_files, record_type):
     """Create a record on a remote server from local data or fail"""
     # Trigger parsing and generate list of json records
     records = utils.iterate_records_from_files(record_files)
     for record in records:
-        data, errors = ctx.obj.target_server.inventory.create(record)
+        data, errors = ctx.obj.target_server.inventory.create(record_type, record)  # NOQA
         if errors:
             for k, error_message in errors.iteritems():
                 click.echo(error_message, err=True)

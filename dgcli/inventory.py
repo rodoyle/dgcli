@@ -46,9 +46,8 @@ class InventoryClient(object):
     def set_credentials(self, username, password):
         self.session.auth = (username, password)
 
-    def _get_schema(self, record):
-        type_ = record.get('type_')
-        return dgparse.VALIDATORS[type_]
+    def _get_schema(self, record_type):
+        return dgparse.VALIDATORS[record_type]
 
     def login(self, username, password):
         self.set_credentials(username, password)
@@ -59,15 +58,15 @@ class InventoryClient(object):
         else:
             raise AuthenticationError
 
-    def create(self, record):
+    def create(self, object_, record):
         """Creates a record"""
-        schema = self._get_schema(record)
+        schema = self._get_schema(object_)
         data, errors = schema.dump(record)
         errors.update(schema.validate(record))
         if errors:
             return record, errors
         instruction = {
-            'object': data.pop('type_'),
+            'object': object_,
             'create': data if isinstance(data, list) else [data],
         }
         # validate instruction

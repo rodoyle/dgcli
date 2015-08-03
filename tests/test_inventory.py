@@ -37,7 +37,6 @@ def construct_response():
 @pytest.fixture
 def plasmid_record():
     return {
-        'type_': 'dnamolecule',
         'accession': 'EB123',
         'name': "TestPlasmid",
         'sequence': {
@@ -55,7 +54,7 @@ def test_inventory_create_service(invsrv, construct_response, plasmid_record):
         return construct_response(expected_response)
     # Important: need to patch the Requests Session method
     with mock.patch('dgcli.inventory.requests.sessions.Session.post', fake_endpoint):
-        data, errors = invsrv.create(plasmid_record)
+        data, errors = invsrv.create('dnamolecule', plasmid_record)
     assert data == [plasmid_record]
     assert not errors
 
