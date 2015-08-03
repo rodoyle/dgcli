@@ -22,11 +22,11 @@ setup(name='dgcli',
           'pyyaml',
           'openpyxl',
           'xlsxwriter',
+          'xlrd',
           'marshmallow',
           'responses'
       ],
       tests_require=[
-          'tox',
           'pytest',
           'mock',
       ],
