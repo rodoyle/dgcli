@@ -1,3 +1,2 @@
--e git+http://github.com/deskgen/dgparse#egg=dgparse
-requests
-xlsxwriter
+pytest
+-e git+http://github.com/DeskGen/dgparse.git@riley/xlsx-parser#egg=dgparse

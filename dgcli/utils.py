@@ -16,46 +16,12 @@ import os
 import requests
 import yaml
 
+import dgparse
+
 
 from dgcli import async_job
 
 log = logging.getLogger(__name__)
-
-def make_post(endpoint_url, credentials, body_dict, output, on_error):
-    """
-    Utility function to make post requests
-    :param url:
-    :param body_dict:
-    :return:
-    """
-
-    resp = requests.post(endpoint_url, json.dumps(body_dict), auth=credentials)
-    result_key = 'read' if 'read' in body_dict else None
-
-    if resp.ok:
-        try:
-            read_list = resp.json()[result_key] if result_key else resp.json()
-            yaml.dump_all(read_list, output, indent=2)
-        except KeyError:
-            on_error(resp)
-        except ValueError:
-            on_error(resp)
-    else:
-        on_error(resp)
-
-
-def make_file_upload_request(endpoint_url, credentials, file_path, output, on_error):
-
-    resp = requests.post(endpoint_url,
-                         files={'inventory_file': open(file_path, 'rb')},
-                         auth=credentials)
-    if resp.ok:  # expect and HTTPCreated 201 Response
-        data = resp.json()
-        yaml.dump(data, output, indent=2)
-    else:
-        on_error(resp)
-
-
 
 
 def make_json_rpc(endpoint_url, credentials, id_, method, params, output, on_error, async=False):
@@ -142,4 +108,17 @@ def iter_repository(repo_root, extension_mapping):
                     parsed_data['url'] = os.path.join(root, name)
                 yield parsed_data
 
+
+def iterate_records_from_files(record_files):
+    """
+    Iterate over all the records in a collection of files
+    :return:
+    """
+    records = []
+    for record_path in record_files:
+        path, format = os.path.splitext(record_path)
+        parser = dgparse.PARSERS[format]
+        with open(record_path, 'r') as record_file:
+            records.extend(parser(record_file))
+    return records
 

@@ -11,20 +11,19 @@ import logging
 import os
 import pprint
 import sys
-import yaml
 
 import click
 import requests
 import xlsxwriter
 
-from dgparse import snapgene
-from dgparse.exc import ParserException
+import dgparse
 
 import dgcli.genomebrowser as gb
 from dgcli.genomebrowser import GB_MODELS
 from dgcli import genome_editing as ge
 from dgcli import utils, libraries, enevolv_writer
 from dgcli import inventory as inv
+from dgcli.configuration import load
 
 
 logging.basicConfig()
@@ -32,59 +31,44 @@ log = logging.getLogger(__name__)
 log.setLevel(logging.DEBUG)
 
 RC_PATH = os.path.expanduser('~/.dgrc')  # Get normalized location of RC files
-with open(RC_PATH, 'r') as rc_file:
-    CONFIG = yaml.load(rc_file) # Load Run Ctrl config into RAM
-
-# Check the ENV for any local overrides
-CONFIG.update(os.environ)
-BIODATA = CONFIG.get('biodata_root', '/opt/biodata')
-
-# Derived Constants
-RPC_URL = os.path.join(CONFIG['target_server'], 'rpc')
-GB_SLICE_URL = os.path.join(CONFIG['target_server'], 'api/genomebrowser')
-DESIGNS = os.path.join(CONFIG['biodata_root'], 'dnadesigns')
-CREDENTIALS = (CONFIG['email'], CONFIG['password'])
 
 
 @click.group()
-def cli():
-    pass
+@click.pass_context
+def cli(ctx):
+    config = load(RC_PATH)
+    ctx.obj = config
 
 
-@cli.command()
-def set_default(key, value):
-    CONFIG[key] = value
+@cli.command('login')
+@click.pass_context
+@click.option('--email')
+@click.option('--password')
+def login_cmd(ctx, email, password):
+    try:
+        ctx.obj.target_server.inventory.login(email, password)
+    except inv.AuthenticationError:
+        click.echo("Error Authenticating", err=True)
 
 
-@cli.command()
-def view_default(key):
-    click.echo(CONFIG[key])
-
-
-def validate_solution(solution_json):
-    """Validate a solution object"""
-    is_circular = solution_json['is_circular']
-    if is_circular:
-        assert solution_json['backbone']
-
-
-@cli.command('fetch')
-@click.argument('record')
+@cli.command('read')
+@click.argument('type')
 @click.option('--filters', default=None)
 @click.option('--output', type=click.File(), default=sys.stdout)
-def fetch_cmd(record, filters, output):
+@click.pass_context
+def read_cmd(ctx, type_, filters, output):
     """Load all of DNA Molecule, Design, Feature, or Annotation from a
     remote source"""
     filters = filters if filters else {}
     if object in GB_MODELS:
         service = 'genomebrowser'
-        body = gb.make_fetch_instruction(record, filters)
+        body = gb.make_fetch_instruction(type_, filters)
     else:
         service = 'inventory'
-        body = {'object': record, 'filters': filters}
+        body = {'object': type_, 'filters': filters}
 
-    endpoint_url = os.path.join(CONFIG['target_server'], 'api/{0}/crud'.format(service))
-    credentials = (CONFIG['email'], CONFIG['password'])
+    endpoint_url = os.path.join(ctx.target_server.url, 'api/{0}/crud'.format(service))
+    credentials = ctx.user.credentials
     resp = requests.post(endpoint_url, json.dumps(body), auth=credentials)
     try:
         read_list = resp.json()['read']
@@ -95,43 +79,37 @@ def fetch_cmd(record, filters, output):
         pprint.pprint(resp.text)
 
 
-@cli.command('push')
-@click.argument('model')
-@click.argument('items', type=click.Path())
-@click.option('--output', '-o', type=click.File(), default=sys.stdout)
-def push_cmd(model, items, output):
-    """Push a list of objects to a remote server"""
-    target_url = os.path.join(CONFIG['target_server'], inv.INVENTORY_CRUD)
-    # Trigger parsing
-
-    def on_error(response):
-        try:
-            click.echo(response.json())
-        except ValueError:
-            click.echo(response.text)
-
-    items = yaml.load(items)
-    for item in items:
-        instruction = inv.make_create_request(model, item)
-        utils.make_post(target_url, CREDENTIALS, instruction, output, on_error)
+@cli.command('create')
+@click.argument('record_files', type=click.STRING, nargs=-1)
+@click.option('--record_type')
+@click.pass_context
+def create_cmd(ctx, record_files, record_type):
+    """Create a record on a remote server from local data or fail"""
+    # Trigger parsing and generate list of json records
+    records = utils.iterate_records_from_files(record_files)
+    for record in records:
+        data, errors = ctx.obj.target_server.inventory.create(record_type, record)  # NOQA
+        if errors:
+            for k, error_message in errors.iteritems():
+                click.echo(error_message, err=True)
 
 
 @cli.command('slice_genome')
 @click.argument('chromosome')
 @click.argument('start_end', nargs=2, type=click.IntRange())
 @click.argument('tracks', type=click.Choice(GB_MODELS))
-@click.option('--genome', default=CONFIG['genome'])
+@click.option('--genome')
 @click.option('--strand', default=0)
 @click.option('--output', type=click.File('wb'), default=sys.stdout)
 @click.option('--sequence', default=False)
 @click.option('--nuclease', default='wtCas9')
-def slice_genome_cmd(genome, chromosome, start_end, tracks, strand, output,
+@click.pass_context
+def slice_genome_cmd(ctx, genome, chromosome, start_end, tracks, strand, output,
                      sequence, nuclease):
     """"
     Load all the track data in the genome browser in an slice interval from
     a remote source.
     """
-    target_url = GB_SLICE_URL
     # FUTURE - genomebrowser should just support dynamic tracks for guides,
     # talens, and other features. For now we use this work around.
     # FUTURE - allow other intersections besides overlaps
@@ -139,9 +117,7 @@ def slice_genome_cmd(genome, chromosome, start_end, tracks, strand, output,
     if 'guides' in tracks:
         guides = True
         del tracks[tracks.index('guides')]
-
-    instruction = gb.make_slice_instruction(genome, chromosome, start_end, strand, sequence)  # NOQA
-    utils.make_post(target_url, instruction, output)
+    ctx.target_server.genomebrowser.slice(genome, chromosome, start_end, strand, sequence)  # NOQA
     # this is a work around as RPC does the guides while GB does the rest
     if guides:
         nuc_slice = ge.make_slice_instruction(chromosome, start_end, nuclease)
@@ -150,26 +126,18 @@ def slice_genome_cmd(genome, chromosome, start_end, tracks, strand, output,
 
 @cli.command('score_guides')
 @click.argument('guides', type=click.File(), default=sys.stdin)
-@click.option('--genome', default=CONFIG['genome'])
+@click.option('--genome')
 @click.option('--output', '-o', type=click.File(), default=sys.stdout)
 @click.option('--async', default=False, type=click.BOOL)
-@click.option('--activity', default=CONFIG['activity_params'])
-@click.option('--offtarget', default=CONFIG['offtarget_params'])
-def score_guides_cmd(guides, genome, async, activity, offtarget, output):
+@click.option('--activity')
+@click.option('--offtarget')
+@click.pass_context
+def score_guides_cmd(ctx, guides, genome, async, activity, offtarget, output):
     """
     Analyze a batch of guide RNAs
     :return:
     """
-    endpoint_url = RPC_URL
-    credentials = CREDENTIALS
-    method = 'score_guide'
-    jobs = ge.make_score_guide_instruction(guides, genome, activity, offtarget)
-
-    def on_error(response):
-        click.echo(response.text)
-
-    utils.make_batch_rpc(endpoint_url, credentials, jobs, method, output,
-                         on_error, async=False)
+    ctx.target_server.workers.score_guide(guides, genome, activity, offtarget)
 
 
 @cli.command()
@@ -193,23 +161,6 @@ def append_targets(spec_file_path, target_file, output, update):
         json.dump(specs, output, indent=2)
 
 
-@cli.command()
-@click.argument('file_path', type=click.Path())
-@click.option('--output', default=sys.stdout, type=click.File())
-def upload(file_path, output):
-    """Upload a file to the inventory or designs"""
-    schema_path = os.path.join(BIODATA, 'remote_schema.json')
-    convention_path = os.path.join(BIODATA, 'file_convention.yaml')
-
-    valid_files = inv.upload_files(file_path, schema_path, convention_path)
-
-    for url, payload in valid_files:
-        if 'crud' in url:
-            utils.make_post(url, CREDENTIALS, payload, output, click.echo)
-        else:
-            utils.make_file_upload_request(url, CREDENTIALS, file_path,
-                                           output, click.echo)
-
 @cli.command('extract')
 @click.argument('source', type=click.STRING, nargs=-1)
 @click.option('--output', default='extracted_dnafeatures.xlsx')
@@ -228,7 +179,7 @@ def extract_cmd(source, output, debug):
         with open(fname, 'r') as snapfile:
             try:
                 # parse the snapgene file and adapt to dtg's schema
-                adapted_data = snapgene.parse(snapfile)
+                adapted_data = dgparse.snapgene.parse(snapfile)
                 if adapted_data['dnafeatures']:
                     # update the record with data from the filename
                     adapted_data.update(inv.parse_file_name(fname))
@@ -237,7 +188,7 @@ def extract_cmd(source, output, debug):
                     click.echo("{0} didn't contain features".format(os.path.basename(fname)))
                 if output == "stdio":
                     click.echo(adapted_data)
-            except ParserException:
+            except dgparse.exc.ParserException:
                 click.echo("Error Parsing {0}".format(fname), err=True)
                 if debug:
                     raise
@@ -245,4 +196,4 @@ def extract_cmd(source, output, debug):
         enevolv_writer.write_to_xls(workbook, records)
 
 if __name__ == '__main__':
-    cli()
+    cli(obj={})

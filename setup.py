@@ -16,20 +16,21 @@ setup(name='dgcli',
           ]
       },
       install_requires=[
+          'dgparse',
           'click',
           'requests',
           'pyyaml',
-          'xlrd',
+          'openpyxl',
           'xlsxwriter',
+          'xlrd',
+          'marshmallow',
+          'responses'
       ],
       tests_require=[
-          'tox',
           'pytest',
           'mock',
       ],
       data_files=[
-          'config/file_convention.yaml',
-          'config/remote_schema.json',
           'config/sample.dgrc'
       ]
 )
