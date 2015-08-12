@@ -16,7 +16,15 @@ from marshmallow import Schema, fields
 import requests
 import dgparse
 
-
+MODELS = {
+    'oligo': 'oligo',
+    'primer': 'oligo',
+    'plasmid': 'dnamolecule',
+    'dnafeature': 'dnafeature',
+    'dnamolecule': 'dnamolecule',
+    'dnadesign': 'dnamolecule',
+    'construct': 'dnamolecule'
+}
 
 log = logging.getLogger(__name__)
 
@@ -58,6 +66,15 @@ class InventoryClient(object):
         else:
             raise AuthenticationError
 
+    def _handle_response(self, record, resp, key='create'):
+        if resp.ok:
+            return resp.json()[key], {}
+        else:
+            try:
+                return record, resp.json()
+            except ValueError:
+                return record, {key: resp.text}
+
     def create(self, object_, record):
         """Creates a record"""
         schema = self._get_schema(object_)
@@ -66,19 +83,19 @@ class InventoryClient(object):
         if errors:
             return record, errors
         instruction = {
-            'object': object_,
+            'object': MODELS[object_],
             'create': data if isinstance(data, list) else [data],
         }
         # validate instruction
         body, errors = self.crudreq_schema.dump(instruction)
         resp = self.session.post(self.crud_url, json=body)
-        if resp.ok:
-            return resp.json()['create'], {}
-        else:
-            try:
-                return record, resp.json()
-            except ValueError:
-                return record, {'create': resp.text}
+        return self._handle_response(record, resp, key='create')
+
+    def upload(self, openfile):
+        """Upload a file"""
+        instruction = {"inventoryfile": openfile}
+        resp = self.session.post(self.upload_url, files=instruction)
+        return self._handle_response(openfile, resp, key='id_')
 
 
 def construct_service(config):
