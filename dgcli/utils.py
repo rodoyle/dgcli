@@ -109,16 +109,5 @@ def iter_repository(repo_root, extension_mapping):
                 yield parsed_data
 
 
-def iterate_records_from_files(record_files):
-    """
-    Iterate over all the records in a collection of files
-    :return:
-    """
-    records = []
-    for record_path in record_files:
-        path, format = os.path.splitext(record_path)
-        parser = dgparse.PARSERS[format]
-        with open(record_path, 'r') as record_file:
-            records.extend(parser(record_file))
-    return records
+
 
