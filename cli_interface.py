@@ -82,16 +82,31 @@ def read_cmd(ctx, type_, filters, output):
 @cli.command('create')
 @click.argument('record_files', type=click.STRING, nargs=-1)
 @click.option('--record_type')
+@click.option('--output', type=click.File('w'), default=sys.stderr)
 @click.pass_context
-def create_cmd(ctx, record_files, record_type):
+def create_cmd(ctx, record_files, record_type, output):
     """Create a record on a remote server from local data or fail"""
     # Trigger parsing and generate list of json records
-    records = utils.iterate_records_from_files(record_files)
-    for record in records:
-        data, errors = ctx.obj.target_server.inventory.create(record_type, record)  # NOQA
+    for record, errors in dgparse.load_iter(record_type, record_files):
+        if not errors:
+            data, errors = ctx.obj.target_server.inventory.create(record_type, record)  # NOQA
         if errors:
-            for k, error_message in errors.iteritems():
-                click.echo(error_message, err=True)
+            click.echo(record.get('name'), err=True)
+            click.echo(pprint.pprint(errors), err=True)
+            record['errors'] = errors
+            json.dump(record, output, indent=2)
+
+
+@cli.command('upload')
+@click.argument('paths', type=click.Path(), nargs=-1)
+@click.pass_context
+def upload_cmd(ctx, paths):
+    """"Upload a file"""
+    for path in paths:
+        with open(path, 'rb') as openfile:
+            file_, errors = ctx.obj.target_server.inventory.upload(openfile)
+        if errors:
+            click.echo(pprint.pprint(errors), err=True)
 
 
 @cli.command('slice_genome')
