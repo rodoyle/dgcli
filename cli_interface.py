@@ -10,9 +10,11 @@ import json
 import logging
 import os
 import pprint
+from pkg_resources import iter_entry_points
 import sys
 
 import click
+from click_plugins import with_plugins
 import requests
 import xlsxwriter
 
@@ -32,7 +34,7 @@ log.setLevel(logging.DEBUG)
 
 RC_PATH = os.path.expanduser('~/.dgrc')  # Get normalized location of RC files
 
-
+@with_plugins(iter_entry_points('dgcli.plugins'))
 @click.group()
 @click.pass_context
 def cli(ctx):

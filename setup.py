@@ -18,6 +18,7 @@ setup(name='dgcli',
       install_requires=[
           'dgparse',
           'click',
+          'click_plugins',
           'requests',
           'pyyaml',
           'openpyxl',
