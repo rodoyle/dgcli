@@ -5,7 +5,7 @@ Contains parameters available to all commands
 
 import os
 
-from marshmallow import Schema, fields
+from marshmallow import Schema, fields, post_load
 import yaml
 
 from dgcli import inventory
@@ -39,7 +39,8 @@ class Config(object):
 class ServerSchema(Schema):
     url = fields.Url(required=True)
 
-    def make_object(self, data):
+    @post_load
+    def make_server(self, data):
         return ServerConfig(**data)
 
 
@@ -48,8 +49,9 @@ class UserSchema(Schema):
     email = fields.Email(required=True)
     password = fields.String(required=True)
     biodata_root = fields.String()
-
-    def make_object(self, data):
+    
+    @post_load
+    def make_user(self, data):
         return UserConfig(**data)
 
 

@@ -4,8 +4,6 @@
 Command line interface to the DeskGen Genome Editing Platform.
 """
 
-from __future__ import unicode_literals
-
 import json
 import logging
 import os
