@@ -1,5 +1,5 @@
-# dgcli
-Command Line Client for DeskGen Platform
+# dgcli [![Build Status](https://travis-ci.org/DeskGen/dgcli.svg?branch=master)](https://travis-ci.org/DeskGen/dgcli)
+Command Line Client for DeskGen Platform  
 
 ## Installation
 
